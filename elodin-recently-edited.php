@@ -1,6 +1,6 @@
 <?php
 /*
-	Plugin Name: Elodin Recently Edited
+	Plugin Name: Recently Edited Quick Links
 	Plugin URI: https://elod.in
 	Description: Just another plugin
 	Version: 0.1
@@ -104,4 +104,13 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	}
 }
 
+// Load Plugin Update Checker.
+require ELODIN_RECENTLY_EDITED_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php';
+$update_checker = Puc_v4_Factory::buildUpdateChecker(
+	'https://github.com/jonschr/elodin-recently-edited',
+	__FILE__,
+	'elodin-recently-edited'
+);
 
+// Optional: Set the branch that contains the stable release.
+$update_checker->setBranch( 'master' );
