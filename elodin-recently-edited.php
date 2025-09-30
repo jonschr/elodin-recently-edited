@@ -105,7 +105,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 }
 
 // Load Plugin Update Checker.
-require ELODIN_RECENTLY_EDITED_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php';
+require ELODIN_RECENTLY_EDITED_DIR . '/vendor/plugin-update-checker/plugin-update-checker.php';
 $update_checker = Puc_v4_Factory::buildUpdateChecker(
 	'https://github.com/jonschr/elodin-recently-edited',
 	__FILE__,
