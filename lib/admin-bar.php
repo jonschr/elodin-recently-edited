@@ -3,6 +3,13 @@
  * Admin bar functionality for Recently Edited Quick Links
  */
 
+function elodin_recently_edited_get_view_link( $post ) {
+	if ( ! $post ) {
+		return '#';
+	}
+	return get_permalink( $post->ID );
+}
+
 function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	$user_id = get_current_user_id();
 	$pinned_ids = get_user_meta( $user_id, 'elodin_recently_edited_pins', true );
@@ -63,10 +70,10 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 
 	// Add main menu item
 	$wp_admin_bar->add_menu( array(
-		'id'       => 'recently-edited',
-		'title'    => 'Recently Edited',
-		'href'     => $main_href,
-		'priority' => 45,
+		'id'     => 'recently-edited',
+		'title'  => 'Recently Edited',
+		'href'   => $main_href,
+		'parent' => 'top-secondary',
 	) );
 
 	// Add submenu items
@@ -138,11 +145,11 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		$row = '<span class="elodin-recently-edited-row">'
 			. '<span class="elodin-recently-edited-title">'
 			. '<span class="elodin-recently-edited-type">' . esc_html( $type_label ) . '</span>'
-			. '<span class="elodin-recently-edited-title-link" data-url="' . esc_url( $edit_url ) . '">' . $title . '</span>'
+			. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $edit_url ) . '">' . $title . '</span>'
 			. '</span>'
 			. '<span class="elodin-recently-edited-actions">'
 			. '<span class="elodin-recently-edited-action elodin-recently-edited-view" data-url="' . esc_url( $view_url ) . '">View</span>'
-			. '<span class="elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">Edit</span>'
+			. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">Edit</span>'
 			. '<select class="elodin-recently-edited-status-select" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
 			. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="Pin">' . esc_html( $pin_icon ) . '</span>'
 			. '</span>'
@@ -152,20 +159,8 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			'id'     => 'recently-edited-' . $post->ID,
 			'parent' => 'recently-edited',
 			'title'  => $row,
-			'href'   => $edit_url,
+			'href'   => '#',
 		) );
 	}
 }
 
-function elodin_recently_edited_get_view_link( $post ) {
-	$view_link = get_permalink( $post );
-	if ( $post->post_status !== 'publish' ) {
-		$view_link = get_preview_post_link( $post );
-	}
-
-	if ( ! $view_link ) {
-		return get_edit_post_link( $post->ID );
-	}
-
-	return $view_link;
-}
