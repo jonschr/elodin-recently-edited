@@ -10,13 +10,15 @@ function elodin_recently_edited_enqueue_assets() {
 
 	wp_enqueue_script( 'jquery' );
 
-	$nonce = wp_create_nonce( 'elodin_recently_edited_pin' );
+	$nonce_pin = wp_create_nonce( 'elodin_recently_edited_pin' );
+	$nonce_status = wp_create_nonce( 'elodin_recently_edited_status' );
 	wp_localize_script(
 		'jquery',
 		'ElodinRecentlyEdited',
 		array(
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-			'nonce'   => $nonce,
+			'noncePin' => $nonce_pin,
+			'nonceStatus' => $nonce_status,
 		)
 	);
 

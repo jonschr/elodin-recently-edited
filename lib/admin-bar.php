@@ -37,11 +37,36 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		return;
 	}
 
+	// Find the most recent post the user can edit
+	$most_recent_edit_url = '#';
+	$most_recent_post_id = 0;
+	$all_posts_for_link = array_merge( $pinned_posts, $recent_posts );
+	foreach ( $all_posts_for_link as $post ) {
+		if ( $post->post_type === 'attachment' ) {
+			continue;
+		}
+		if ( current_user_can( 'edit_post', $post->ID ) ) {
+			$edit_url = get_edit_post_link( $post->ID );
+			if ( $edit_url ) {
+				$most_recent_edit_url = $edit_url;
+				$most_recent_post_id = $post->ID;
+				break;
+			}
+		}
+	}
+
+	// If we're on the edit page of the most recent post, link to frontend instead
+	$main_href = $most_recent_edit_url;
+	if ( is_admin() && isset( $_GET['post'] ) && isset( $_GET['action'] ) && $_GET['action'] === 'edit' && intval( $_GET['post'] ) === $most_recent_post_id ) {
+		$main_href = elodin_recently_edited_get_view_link( get_post( $most_recent_post_id ) );
+	}
+
 	// Add main menu item
 	$wp_admin_bar->add_menu( array(
-		'id'    => 'recently-edited',
-		'title' => 'Recently Edited',
-		'href'  => '#',
+		'id'       => 'recently-edited',
+		'title'    => 'Recently Edited',
+		'href'     => $main_href,
+		'priority' => 45,
 	) );
 
 	// Add submenu items
@@ -92,34 +117,33 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		$post_type_obj = get_post_type_object( $post->post_type );
 		$type_label = $post_type_obj ? $post_type_obj->labels->singular_name : $post->post_type;
 
-		$status_labels = array(
-			'draft'   => 'Draft',
-			'pending' => 'Pending',
-			'private' => 'Private',
-			'publish' => 'Published',
-		);
-		$status_label = isset( $status_labels[ $post->post_status ] ) ? $status_labels[ $post->post_status ] : ucfirst( $post->post_status );
-
 		$is_pinned = in_array( $post->ID, $pinned_ids, true );
 		$pin_class = $is_pinned ? 'elodin-recently-edited-pin is-pinned' : 'elodin-recently-edited-pin';
 		$pin_icon = $is_pinned ? '★' : '☆';
 
 		$status_options = '';
+		$status_labels = array(
+			'draft'   => 'Draft',
+			'pending' => 'Pending',
+			'private' => 'Private',
+			'publish' => 'Published',
+			'delete'  => 'Delete',
+		);
 		foreach ( $status_labels as $value => $label ) {
 			$selected = $post->post_status === $value ? ' selected' : '';
-			$status_options .= '<option value="' . esc_attr( $value ) . '"' . $selected . '>' . esc_html( $label ) . '</option>';
+			$class = $value === 'delete' ? ' class="delete-option"' : '';
+			$status_options .= '<option value="' . esc_attr( $value ) . '"' . $selected . $class . '>' . esc_html( $label ) . '</option>';
 		}
 
 		$row = '<span class="elodin-recently-edited-row">'
 			. '<span class="elodin-recently-edited-title">'
 			. '<span class="elodin-recently-edited-type">' . esc_html( $type_label ) . '</span>'
-			. '<span class="elodin-recently-edited-status">' . esc_html( $status_label ) . '</span>'
 			. '<span class="elodin-recently-edited-title-link" data-url="' . esc_url( $edit_url ) . '">' . $title . '</span>'
 			. '</span>'
 			. '<span class="elodin-recently-edited-actions">'
 			. '<span class="elodin-recently-edited-action elodin-recently-edited-view" data-url="' . esc_url( $view_url ) . '">View</span>'
 			. '<span class="elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">Edit</span>'
-			. '<select class="elodin-recently-edited-status-select" data-post-id="' . intval( $post->ID ) . '">' . $status_options . '</select>'
+			. '<select class="elodin-recently-edited-status-select" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
 			. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="Pin">' . esc_html( $pin_icon ) . '</span>'
 			. '</span>'
 			. '</span>';

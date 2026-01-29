@@ -23,7 +23,7 @@ jQuery(function ($) {
 			$.post(ElodinRecentlyEdited.ajaxUrl, {
 				action: 'elodin_recently_edited_toggle_pin',
 				post_id: postId,
-				nonce: ElodinRecentlyEdited.nonce,
+				nonce: ElodinRecentlyEdited.noncePin,
 			})
 				.done(function () {
 					window.location.reload();
@@ -34,4 +34,37 @@ jQuery(function ($) {
 			return false;
 		},
 	);
+	$(document).on('click', '#wp-admin-bar-recently-edited .ab-submenu a', function (e) {
+		if ($(e.target).is('select.elodin-recently-edited-status-select') || $(e.target).closest('select.elodin-recently-edited-status-select').length) {
+			e.preventDefault();
+			e.stopPropagation();
+		}
+	});
+	$(document).on('click', '.elodin-recently-edited-status-select', function (e) {
+		e.stopPropagation();
+	});
+	$(document).on('change', '.elodin-recently-edited-status-select', function (e) {
+		e.preventDefault();
+		var $select = $(this);
+		var postId = $select.data('postId');
+		var status = $select.val();
+		var original = $select.data('original');
+		if (!postId || !status || status === original) {
+			return;
+		}
+		if (status === 'delete') {
+			if (!confirm('Are you sure you want to delete this post?')) {
+				$select.val(original);
+				return;
+			}
+		}
+		$.post(ElodinRecentlyEdited.ajaxUrl, {
+			action: 'elodin_recently_edited_update_status',
+			post_id: postId,
+			status: status,
+			nonce: ElodinRecentlyEdited.nonceStatus,
+		}).always(function () {
+			window.location.reload();
+		});
+	});
 });
