@@ -55,8 +55,14 @@ jQuery(function ($) {
 		function (e) {
 			if (
 				$(e.target).is('select.elodin-recently-edited-status-select') ||
+				$(e.target).is(
+					'select.elodin-recently-edited-post-type-select',
+				) ||
 				$(e.target).closest(
 					'select.elodin-recently-edited-status-select',
+				).length ||
+				$(e.target).closest(
+					'select.elodin-recently-edited-post-type-select',
 				).length
 			) {
 				e.preventDefault();
@@ -66,7 +72,7 @@ jQuery(function ($) {
 	);
 	$(document).on(
 		'click',
-		'.elodin-recently-edited-status-select',
+		'.elodin-recently-edited-status-select, .elodin-recently-edited-post-type-select',
 		function (e) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -119,6 +125,45 @@ jQuery(function ($) {
 				.fail(function () {
 					$select.val(original);
 					alert('Failed to update status.');
+				});
+		},
+	);
+	$(document).on(
+		'change',
+		'.elodin-recently-edited-post-type-select',
+		function (e) {
+			e.preventDefault();
+			var $select = $(this);
+			var postId = $select.data('postId');
+			var postType = $select.val();
+			var original = $select.data('original');
+			if (!postId || !postType) {
+				return;
+			}
+			$.post(ElodinRecentlyEdited.ajaxUrl, {
+				action: 'elodin_recently_edited_update_post_type',
+				post_id: postId,
+				post_type: postType,
+				nonce: ElodinRecentlyEdited.noncePostType,
+			})
+				.done(function (response) {
+					if (response.success) {
+						// Update the original post type
+						$select.data('original', postType);
+					} else {
+						// Revert on error
+						$select.val(original);
+						alert(
+							'Error updating post type: ' +
+								(response.data
+									? response.data.message
+									: 'Unknown error'),
+						);
+					}
+				})
+				.fail(function () {
+					$select.val(original);
+					alert('Failed to update post type.');
 				});
 		},
 	);

@@ -104,8 +104,8 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 
 		$view_url = elodin_recently_edited_get_view_link( $post );
 
-		// Limit to 10 items
-		if ( $count >= 10 ) {
+		// Limit to 50 items
+		if ( $count >= 50 ) {
 			break;
 		}
 		$count++;
@@ -120,9 +120,6 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			}
 		}
 		$title = esc_html( $title );
-
-		$post_type_obj = get_post_type_object( $post->post_type );
-		$type_label = $post_type_obj ? $post_type_obj->labels->singular_name : $post->post_type;
 
 		$is_pinned = in_array( $post->ID, $pinned_ids, true );
 		$pin_class = $is_pinned ? 'elodin-recently-edited-pin is-pinned' : 'elodin-recently-edited-pin';
@@ -142,15 +139,36 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			$status_options .= '<option value="' . esc_attr( $value ) . '"' . $selected . $class . '>' . esc_html( $label ) . '</option>';
 		}
 
-		$row = '<span class="elodin-recently-edited-row">'
+		// Build post type options
+		$post_type_options = '';
+		$post_types = get_post_types( array( 'public' => true, 'show_ui' => true ), 'objects' );
+		foreach ( $post_types as $pt_slug => $pt_obj ) {
+			// Check if user can create posts of this type
+			if ( ! current_user_can( $pt_obj->cap->create_posts ) ) {
+				continue;
+			}
+			$selected = $post->post_type === $pt_slug ? ' selected' : '';
+			$post_type_options .= '<option value="' . esc_attr( $pt_slug ) . '"' . $selected . '>' . esc_html( $pt_obj->labels->singular_name ) . '</option>';
+		}
+
+		// Determine the URL for the title link
+		// Use view URL if post can be viewed on frontend, otherwise use edit URL
+		$post_type_obj = get_post_type_object( $post->post_type );
+		$can_view_publicly = $post_type_obj && $post_type_obj->publicly_queryable && 
+		                    ($post->post_status === 'publish' || current_user_can( 'read_private_posts', $post->ID ));
+		$title_url = $can_view_publicly ? $view_url : $edit_url;
+
+		// Add class for non-published posts
+		$row_class = $post->post_status === 'publish' ? 'elodin-recently-edited-row' : 'elodin-recently-edited-row elodin-recently-edited-row--not-published';
+
+		$row = '<span class="' . esc_attr( $row_class ) . '">'
 			. '<span class="elodin-recently-edited-title">'
-			. '<span class="elodin-recently-edited-type">' . esc_html( $type_label ) . '</span>'
-			. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $edit_url ) . '">' . $title . '</span>'
+			. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '">' . $title . '</span>'
 			. '</span>'
 			. '<span class="elodin-recently-edited-actions">'
-			. '<span class="elodin-recently-edited-action elodin-recently-edited-view" data-url="' . esc_url( $view_url ) . '">View</span>'
 			. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">Edit</span>'
 			. '<select class="elodin-recently-edited-status-select" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
+			. '<select class="elodin-recently-edited-post-type-select" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_type ) . '">' . $post_type_options . '</select>'
 			. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="Pin">' . esc_html( $pin_icon ) . '</span>'
 			. '</span>'
 			. '</span>';

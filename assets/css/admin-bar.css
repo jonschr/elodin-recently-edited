@@ -1,6 +1,8 @@
 #wp-admin-bar-recently-edited {
 	.ab-submenu {
 		min-width: 420px;
+		max-height: 400px;
+		overflow-y: auto;
 	}
 
 	.ab-submenu .ab-item {
@@ -15,6 +17,10 @@
 		width: 100%;
 	}
 
+	.elodin-recently-edited-row--not-published {
+		opacity: 0.6;
+	}
+
 	.elodin-recently-edited-title {
 		flex: 1 1 auto;
 		min-width: 0;
@@ -23,17 +29,12 @@
 		text-overflow: ellipsis;
 	}
 
-	.elodin-recently-edited-type {
-		color: rgba(255, 255, 255, 0.7) !important;
-		margin-right: 6px;
-	}
-
-	.ab-item:hover .elodin-recently-edited-type {
-		color: rgba(255, 255, 255, 0.7) !important;
-	}
-
 	.elodin-recently-edited-title-link {
 		color: #fff;
+	}
+
+	.elodin-recently-edited-title-link:hover {
+		text-decoration: underline;
 	}
 
 	.elodin-recently-edited-actions {
@@ -84,7 +85,26 @@
 		.elodin-recently-edited-status-select option.delete-option {
 			color: #ff6b6b;
 		}
-	}
+
+		.elodin-recently-edited-post-type-select {
+			background: none;
+			border: none;
+			color: rgba(255, 255, 255, 0.7);
+			cursor: pointer;
+			font-size: 12px;
+			line-height: 1;
+			padding: 0 4px;
+			margin: 0;
+			appearance: none;
+			-webkit-appearance: none;
+			-moz-appearance: none;
+		}
+
+		.elodin-recently-edited-post-type-select:hover,
+		.elodin-recently-edited-post-type-select:focus {
+			color: #fff;
+			text-decoration: underline;
+		}
 
 	.elodin-recently-edited-pin {
 		display: inline-flex;
