@@ -30,79 +30,16 @@ define( 'ELODIN_RECENTLY_EDITED_DIR', dirname( __FILE__ ) );
 // Define the version of the plugin
 define ( 'ELODIN_RECENTLY_EDITED_VERSION', '0.1' );
 
+// Include library files
+require_once ELODIN_RECENTLY_EDITED_DIR . '/lib/admin-bar.php';
+require_once ELODIN_RECENTLY_EDITED_DIR . '/lib/ajax.php';
+require_once ELODIN_RECENTLY_EDITED_DIR . '/lib/assets.php';
+
 // Add recently edited posts to admin bar
 add_action( 'admin_bar_menu', 'elodin_recently_edited_admin_bar', 999 );
-
-function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
-	// Get more posts than needed to account for filtering
-	$args = array(
-		'post_type'           => 'any',
-		'post_type__not_in'   => array( 'attachment' ),
-		'post_status'         => 'any',
-		'posts_per_page'      => 20, // Get more to account for filtering
-		'orderby'             => 'modified',
-		'order'               => 'DESC',
-	);
-
-	$recent_posts = get_posts( $args );
-
-	if ( empty( $recent_posts ) ) {
-		return;
-	}
-
-	// Add main menu item
-	$wp_admin_bar->add_menu( array(
-		'id'    => 'recently-edited',
-		'title' => 'Recently Edited',
-		'href'  => '#',
-	) );
-
-	// Add submenu items
-	$count = 0;
-	foreach ( $recent_posts as $post ) {
-		// Skip attachments (media items)
-		if ( $post->post_type === 'attachment' ) {
-			continue;
-		}
-
-		// Check if user can edit this post
-		if ( ! current_user_can( 'edit_post', $post->ID ) ) {
-			continue;
-		}
-
-		$edit_url = get_edit_post_link( $post->ID );
-		if ( ! $edit_url ) {
-			continue;
-		}
-
-		// Limit to 10 items
-		if ( $count >= 10 ) {
-			break;
-		}
-		$count++;
-
-		$title = $post->post_title;
-		if ( empty( $title ) ) {
-			$title = '(no title)';
-		} else {
-			// Truncate to 40 characters
-			if ( strlen( $title ) > 40 ) {
-				$title = substr( $title, 0, 40 ) . '...';
-			}
-		}
-		$title = esc_html( $title );
-
-		$post_type_obj = get_post_type_object( $post->post_type );
-		$type_label = $post_type_obj ? $post_type_obj->labels->singular_name : $post->post_type;
-
-		$wp_admin_bar->add_menu( array(
-			'id'     => 'recently-edited-' . $post->ID,
-			'parent' => 'recently-edited',
-			'title'  => $type_label . ' <span style="color: white;">' . $title . '</span>',
-			'href'   => $edit_url,
-		) );
-	}
-}
+add_action( 'admin_enqueue_scripts', 'elodin_recently_edited_enqueue_assets' );
+add_action( 'wp_enqueue_scripts', 'elodin_recently_edited_enqueue_assets' );
+add_action( 'wp_ajax_elodin_recently_edited_toggle_pin', 'elodin_recently_edited_toggle_pin' );
 
 // Load Plugin Update Checker.
 require ELODIN_RECENTLY_EDITED_DIR . '/vendor/plugin-update-checker/plugin-update-checker.php';

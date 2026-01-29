@@ -1,0 +1,79 @@
+#wp-admin-bar-recently-edited {
+	.ab-submenu {
+		min-width: 420px;
+	}
+
+	.ab-submenu .ab-item {
+		display: block;
+	}
+
+	.elodin-recently-edited-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		width: 100%;
+	}
+
+	.elodin-recently-edited-title {
+		flex: 1 1 auto;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.elodin-recently-edited-type {
+		color: rgba(255, 255, 255, 0.7) !important;
+		margin-right: 6px;
+	}
+
+	.ab-item:hover .elodin-recently-edited-type {
+		color: rgba(255, 255, 255, 0.7) !important;
+	}
+
+	.elodin-recently-edited-title-link {
+		color: #fff;
+	}
+
+	.elodin-recently-edited-actions {
+		flex: 0 0 auto;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-left: 14px;
+
+		span {
+			color: #9ec2ff;
+			cursor: pointer;
+			font-size: 12px;
+			line-height: 1;
+			display: inline-flex;
+			align-items: center;
+		}
+
+		.elodin-recently-edited-action {
+			padding: 0 4px;
+		}
+
+		span:hover {
+			color: #fff;
+		}
+	}
+
+	.elodin-recently-edited-pin {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		margin-left: 2px;
+		color: #f4c542 !important;
+		font-size: 14px;
+		line-height: 1;
+
+		&.is-pinned {
+			color: #f4c542 !important;
+		}
+	}
+}
