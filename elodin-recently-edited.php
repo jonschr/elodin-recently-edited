@@ -3,7 +3,7 @@
  * Recently Edited Quick Links - Main Plugin File
  *
  * @package ElodinRecentlyEdited
- * @version 0.1
+ * @version 1.0
  * @author Jon Schroeder
  * @license GPL-2.0+
  */
@@ -12,7 +12,7 @@
 	Plugin Name: Recently Edited Quick Links
 	Plugin URI: https://elod.in
 	Description: Adds a quick access menu to the WordPress admin bar showing recently edited posts with status management and pinning functionality.
-	Version: 0.1
+	Version: 1.0
 	Author: Jon Schroeder
 	Author URI: https://elod.in
 	License: GPL-2.0+
@@ -31,7 +31,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Define plugin constants
 define( 'ELODIN_RECENTLY_EDITED_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ELODIN_RECENTLY_EDITED_URL', plugin_dir_url( __FILE__ ) );
-define( 'ELODIN_RECENTLY_EDITED_VERSION', '0.1' );
+define( 'ELODIN_RECENTLY_EDITED_VERSION', '1.0' );
 define( 'ELODIN_RECENTLY_EDITED_BASENAME', plugin_basename( __FILE__ ) );
 
 // Include library files with proper path validation
