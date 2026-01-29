@@ -10,11 +10,13 @@ jQuery(function ($) {
 	 * Check if we should keep the recently edited menu open after page load
 	 */
 	function checkAndRestoreMenuState() {
-		var shouldKeepOpen = sessionStorage.getItem('elodin_recently_edited_keep_menu_open');
+		var shouldKeepOpen = sessionStorage.getItem(
+			'elodin_recently_edited_keep_menu_open',
+		);
 		if (shouldKeepOpen === 'true') {
 			// Clear the flag
 			sessionStorage.removeItem('elodin_recently_edited_keep_menu_open');
-			
+
 			// Add hover class to keep menu open
 			$('#wp-admin-bar-recently-edited').addClass('hover');
 		}
@@ -30,17 +32,17 @@ jQuery(function ($) {
 		if (!url || url === '#') {
 			return;
 		}
-		
+
 		// Set flag to keep menu open after navigation
 		sessionStorage.setItem('elodin_recently_edited_keep_menu_open', 'true');
-		
+
 		window.location.href = url;
 	});
 
 	/**
 	 * Handle clicks outside the menu to close it
 	 */
-	$(document).on('click', function(e) {
+	$(document).on('click', function (e) {
 		// If click is outside the recently edited menu, remove the keep-open flag
 		if (!$(e.target).closest('#wp-admin-bar-recently-edited').length) {
 			sessionStorage.removeItem('elodin_recently_edited_keep_menu_open');

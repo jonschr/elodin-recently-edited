@@ -204,8 +204,25 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		}
 
 		// Determine the URL for the title link
-		// Always link to frontend view for consistency
-		$title_url = $view_url;
+		// Link to frontend unless post type has no singular template or status is draft/pending
+		$post_type_obj = get_post_type_object( $post->post_type );
+		
+		// Check if post type has singular templates
+		// Some post types might be registered with publicly_queryable=false but still have templates
+		$has_singular_template = false;
+		if ($post_type_obj) {
+			// Standard WordPress post types that should have singular templates
+			$standard_public_types = array('post', 'page');
+			if (in_array($post->post_type, $standard_public_types, true)) {
+				$has_singular_template = true;
+			} elseif (isset($post_type_obj->publicly_queryable) && $post_type_obj->publicly_queryable) {
+				$has_singular_template = true;
+			}
+		}
+		
+		$is_draft_or_pending = in_array( $post->post_status, array( 'draft', 'pending' ), true );
+		
+		$title_url = ( $has_singular_template && ! $is_draft_or_pending ) ? $view_url : $edit_url;
 
 		// Add class for non-published posts
 		$row_class = $post->post_status === 'publish' ? 'elodin-recently-edited-row' : 'elodin-recently-edited-row elodin-recently-edited-row--not-published';
