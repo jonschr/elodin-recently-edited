@@ -1,55 +1,78 @@
 <?php
+/**
+ * Recently Edited Quick Links - Main Plugin File
+ *
+ * @package ElodinRecentlyEdited
+ * @version 0.1
+ * @author Jon Schroeder
+ * @license GPL-2.0+
+ */
+
 /*
 	Plugin Name: Recently Edited Quick Links
 	Plugin URI: https://elod.in
-	Description: Just another plugin
+	Description: Adds a quick access menu to the WordPress admin bar showing recently edited posts with status management and pinning functionality.
 	Version: 0.1
 	Author: Jon Schroeder
 	Author URI: https://elod.in
-
-	This program is free software; you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation; either version 2 of the License, or
-	(at your option) any later version.
-
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-	GNU General Public License for more details.
+	License: GPL-2.0+
+	License URI: https://www.gnu.org/licenses/gpl-2.0.html
+	Text Domain: elodin-recently-edited
+	Requires at least: 5.0
+	Tested up to: 6.4
+	Requires PHP: 7.2
 */
 
-
 /* Prevent direct access to the plugin */
-if ( !defined( 'ABSPATH' ) ) {
-	die( "Sorry, you are not allowed to access this page directly." );
+if ( ! defined( 'ABSPATH' ) ) {
+	exit; // Exit if accessed directly
 }
 
-// Plugin directory
-define( 'ELODIN_RECENTLY_EDITED_DIR', dirname( __FILE__ ) );
+// Define plugin constants
+define( 'ELODIN_RECENTLY_EDITED_DIR', plugin_dir_path( __FILE__ ) );
+define( 'ELODIN_RECENTLY_EDITED_URL', plugin_dir_url( __FILE__ ) );
+define( 'ELODIN_RECENTLY_EDITED_VERSION', '0.1' );
+define( 'ELODIN_RECENTLY_EDITED_BASENAME', plugin_basename( __FILE__ ) );
 
-// Define the version of the plugin
-define ( 'ELODIN_RECENTLY_EDITED_VERSION', '0.1' );
+// Include library files with proper path validation
+$library_files = array(
+	'admin-bar.php',
+	'ajax.php',
+	'assets.php',
+);
 
-// Include library files
-require_once ELODIN_RECENTLY_EDITED_DIR . '/lib/admin-bar.php';
-require_once ELODIN_RECENTLY_EDITED_DIR . '/lib/ajax.php';
-require_once ELODIN_RECENTLY_EDITED_DIR . '/lib/assets.php';
+foreach ( $library_files as $file ) {
+	$file_path = ELODIN_RECENTLY_EDITED_DIR . 'lib/' . $file;
+	if ( file_exists( $file_path ) ) {
+		require_once $file_path;
+	}
+}
 
-// Add recently edited posts to admin bar
+// Hook into WordPress
 add_action( 'admin_bar_menu', 'elodin_recently_edited_admin_bar', 999 );
 add_action( 'admin_enqueue_scripts', 'elodin_recently_edited_enqueue_assets' );
 add_action( 'wp_enqueue_scripts', 'elodin_recently_edited_enqueue_assets' );
+
+// AJAX handlers with proper action naming
 add_action( 'wp_ajax_elodin_recently_edited_toggle_pin', 'elodin_recently_edited_toggle_pin' );
 add_action( 'wp_ajax_elodin_recently_edited_update_status', 'elodin_recently_edited_update_status' );
 add_action( 'wp_ajax_elodin_recently_edited_update_post_type', 'elodin_recently_edited_update_post_type' );
 
-// Load Plugin Update Checker.
-require ELODIN_RECENTLY_EDITED_DIR . '/vendor/plugin-update-checker/plugin-update-checker.php';
-$update_checker = Puc_v4_Factory::buildUpdateChecker(
-	'https://github.com/jonschr/elodin-recently-edited',
-	__FILE__,
-	'elodin-recently-edited'
-);
+// Load Plugin Update Checker with error handling
+$update_checker_file = ELODIN_RECENTLY_EDITED_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php';
+if ( file_exists( $update_checker_file ) ) {
+	require $update_checker_file;
 
-// Optional: Set the branch that contains the stable release.
-$update_checker->setBranch( 'master' );
+	if ( class_exists( 'Puc_v4_Factory' ) ) {
+		$update_checker = Puc_v4_Factory::buildUpdateChecker(
+			'https://github.com/jonschr/elodin-recently-edited',
+			__FILE__,
+			'elodin-recently-edited'
+		);
+
+		// Set the branch that contains the stable release
+		if ( method_exists( $update_checker, 'setBranch' ) ) {
+			$update_checker->setBranch( 'master' );
+		}
+	}
+}

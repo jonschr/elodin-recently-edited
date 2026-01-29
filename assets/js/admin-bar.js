@@ -1,13 +1,60 @@
+/**
+ * JavaScript functionality for Recently Edited Quick Links admin bar
+ *
+ * Handles AJAX interactions for pinning posts, updating status, and changing post types.
+ * All AJAX requests include proper nonce verification for security.
+ */
+
 jQuery(function ($) {
+	/**
+	 * Check if we should keep the recently edited menu open after page load
+	 */
+	function checkAndRestoreMenuState() {
+		var shouldKeepOpen = sessionStorage.getItem('elodin_recently_edited_keep_menu_open');
+		if (shouldKeepOpen === 'true') {
+			// Clear the flag
+			sessionStorage.removeItem('elodin_recently_edited_keep_menu_open');
+			
+			// Add hover class to keep menu open
+			$('#wp-admin-bar-recently-edited').addClass('hover');
+		}
+	}
+
+	/**
+	 * Handle clicks on action links (view, edit, etc.)
+	 */
 	$(document).on('click', '.elodin-recently-edited-action', function (e) {
 		e.preventDefault();
 		e.stopPropagation();
 		var url = $(this).data('url');
-		if (!url) {
+		if (!url || url === '#') {
 			return;
 		}
+		
+		// Set flag to keep menu open after navigation
+		sessionStorage.setItem('elodin_recently_edited_keep_menu_open', 'true');
+		
 		window.location.href = url;
 	});
+
+	/**
+	 * Handle clicks outside the menu to close it
+	 */
+	$(document).on('click', function(e) {
+		// If click is outside the recently edited menu, remove the keep-open flag
+		if (!$(e.target).closest('#wp-admin-bar-recently-edited').length) {
+			sessionStorage.removeItem('elodin_recently_edited_keep_menu_open');
+		}
+	});
+
+	/**
+	 * Initialize menu state on page load
+	 */
+	checkAndRestoreMenuState();
+
+	/**
+	 * Handle pin/unpin toggle for posts
+	 */
 	$(document).on(
 		'click',
 		'#wp-admin-bar-recently-edited .elodin-recently-edited-pin',
@@ -49,6 +96,10 @@ jQuery(function ($) {
 			return false;
 		},
 	);
+
+	/**
+	 * Prevent clicks on select elements from triggering parent link navigation
+	 */
 	$(document).on(
 		'click',
 		'#wp-admin-bar-recently-edited .ab-submenu a',
@@ -70,6 +121,10 @@ jQuery(function ($) {
 			}
 		},
 	);
+
+	/**
+	 * Prevent select clicks from bubbling up
+	 */
 	$(document).on(
 		'click',
 		'.elodin-recently-edited-status-select, .elodin-recently-edited-post-type-select',
@@ -78,6 +133,10 @@ jQuery(function ($) {
 			e.stopPropagation();
 		},
 	);
+
+	/**
+	 * Handle status change for posts
+	 */
 	$(document).on(
 		'change',
 		'.elodin-recently-edited-status-select',
@@ -128,6 +187,10 @@ jQuery(function ($) {
 				});
 		},
 	);
+
+	/**
+	 * Handle post type change for posts
+	 */
 	$(document).on(
 		'change',
 		'.elodin-recently-edited-post-type-select',
