@@ -2,8 +2,9 @@
 #wp-admin-bar-related {
 	.ab-submenu {
 		min-width: 420px;
-		max-height: 400px;
-		overflow-y: auto;
+		height: auto !important;
+		max-height: 400px !important;
+		overflow-y: auto !important;
 	}
 
 	.ab-submenu .ab-item {
@@ -123,5 +124,103 @@
 		.elodin-recently-edited-pin.is-pinned {
 			color: #f4c542 !important;
 		}
+	}
+}
+
+#wp-admin-bar-recently-edited .elodin-recently-edited-menu-star {
+	color: #f4c542;
+	margin-right: 2px;
+	font-size: 12px;
+}
+
+#wp-admin-bar-recently-edited > .ab-item:hover,
+#wp-admin-bar-recently-edited > .ab-item:focus,
+#wp-admin-bar-related > .ab-item:hover,
+#wp-admin-bar-related > .ab-item:focus {
+	color: #fff !important;
+}
+
+#wp-admin-bar-related {
+	#wpadminbar &.elodin-related-short .ab-submenu {
+		max-height: none !important;
+		overflow-y: visible !important;
+		overflow: visible !important;
+		padding-bottom: 6px !important;
+	}
+
+	#wpadminbar & .ab-submenu {
+		padding: 0 !important;
+	}
+
+	#wpadminbar & .ab-submenu .wp-admin-bar-related-default,
+	#wpadminbar & .wp-admin-bar-related-default {
+		padding-top: 0 !important;
+	}
+
+	.elodin-related-pill-item {
+		float: none !important;
+		clear: both !important;
+		width: 100% !important;
+		height: auto !important;
+		min-height: 0 !important;
+		line-height: normal !important;
+	}
+
+	.elodin-related-pill-item > .ab-item {
+		padding: 0 !important;
+		height: auto !important;
+		min-height: 0 !important;
+		line-height: normal !important;
+		min-width: 0 !important;
+		white-space: normal !important;
+		overflow: visible !important;
+	}
+
+	.elodin-related-pill-band {
+		display: flex !important;
+		flex-wrap: wrap !important;
+		gap: 4px !important;
+		padding: 8px !important;
+		margin: 0 !important;
+		background: rgba(0, 0, 0, 0.18) !important;
+		border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+	}
+
+	.elodin-related-pill {
+		display: inline-flex !important;
+		align-items: center !important;
+		padding: 2px 8px !important;
+		border-radius: 5px !important;
+		border: 1px solid rgba(255, 255, 255, 0.35) !important;
+		background: rgba(255, 255, 255, 0.08) !important;
+		color: rgba(255, 255, 255, 0.85) !important;
+		font-size: 12px !important;
+		line-height: 1.2 !important;
+		text-decoration: none !important;
+		height: auto !important;
+		min-width: 0 !important;
+		white-space: nowrap !important;
+	}
+
+	.elodin-related-pill:hover {
+		background: rgba(255, 255, 255, 0.18) !important;
+		border-color: rgba(255, 255, 255, 0.55) !important;
+		text-decoration: none !important;
+	}
+
+	.elodin-related-pill.is-current {
+		background: rgba(244, 197, 66, 0.18) !important;
+		border-color: rgba(244, 197, 66, 0.7) !important;
+		color: #fff !important;
+		font-weight: 400 !important;
+	}
+
+	.elodin-related-pill-item + li {
+		margin-top: 0 !important;
+	}
+
+	.elodin-related-pill-item + li > .ab-item {
+		padding-top: 0 !important;
 	}
 }

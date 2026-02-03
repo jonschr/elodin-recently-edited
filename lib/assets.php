@@ -40,12 +40,17 @@ function elodin_recently_edited_enqueue_assets() {
 		)
 	);
 
+	$js_path  = plugin_dir_path( __FILE__ ) . '../assets/js/admin-bar.js';
+	$css_path = plugin_dir_path( __FILE__ ) . '../assets/css/admin-bar.css';
+	$js_ver   = file_exists( $js_path ) ? filemtime( $js_path ) : ELODIN_RECENTLY_EDITED_VERSION;
+	$css_ver  = file_exists( $css_path ) ? filemtime( $css_path ) : ELODIN_RECENTLY_EDITED_VERSION;
+
 	// Enqueue main JavaScript file
 	wp_enqueue_script(
 		'elodin-recently-edited-js',
 		plugin_dir_url( __FILE__ ) . '../assets/js/admin-bar.js',
 		array( 'jquery' ),
-		ELODIN_RECENTLY_EDITED_VERSION,
+		$js_ver,
 		true
 	);
 
@@ -54,6 +59,6 @@ function elodin_recently_edited_enqueue_assets() {
 		'elodin-recently-edited-css',
 		plugin_dir_url( __FILE__ ) . '../assets/css/admin-bar.css',
 		array(),
-		ELODIN_RECENTLY_EDITED_VERSION
+		$css_ver
 	);
 }

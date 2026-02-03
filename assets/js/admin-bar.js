@@ -7,11 +7,31 @@
 
 jQuery(function ($) {
 	var menuIds = ['wp-admin-bar-recently-edited', 'wp-admin-bar-related'];
+	var closeDelayMs = 2000;
+	var closeTimers = {};
 
 	function storageKey(menuId) {
 		return menuId === 'wp-admin-bar-related'
 			? 'elodin_related_keep_menu_open'
 			: 'elodin_recently_edited_keep_menu_open';
+	}
+
+	function cancelClose(menuId) {
+		if (closeTimers[menuId]) {
+			clearTimeout(closeTimers[menuId]);
+			delete closeTimers[menuId];
+		}
+	}
+
+	function scheduleClose(menuId) {
+		if (!menuId) {
+			return;
+		}
+		cancelClose(menuId);
+		$('#' + menuId).addClass('hover');
+		closeTimers[menuId] = window.setTimeout(function () {
+			clearKeepOpenState(menuId);
+		}, closeDelayMs);
 	}
 
 	function clearKeepOpenState(menuId) {
@@ -21,6 +41,7 @@ jQuery(function ($) {
 			});
 			return;
 		}
+		cancelClose(menuId);
 		sessionStorage.removeItem(storageKey(menuId));
 		$('#' + menuId).removeClass('hover');
 	}
@@ -67,6 +88,17 @@ jQuery(function ($) {
 	});
 
 	/**
+	 * Keep the related menu open after selecting a content type
+	 */
+	$(document).on(
+		'click',
+		'#wp-admin-bar-related .elodin-related-pill',
+		function () {
+			sessionStorage.setItem(storageKey('wp-admin-bar-related'), 'true');
+		},
+	);
+
+	/**
 	 * Handle clicks outside the menu to close it
 	 */
 	$(document).on('click', function (e) {
@@ -81,15 +113,48 @@ jQuery(function ($) {
 	});
 
 	/**
-	 * Close menu when the user moves the mouse away
+	 * Keep menu open briefly when the user moves the mouse away
 	 */
 	$(document).on(
 		'mouseleave',
 		'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
 		function () {
-			clearKeepOpenState($(this).attr('id'));
+			scheduleClose($(this).attr('id'));
 		},
 	);
+
+	/**
+	 * Close the other menu immediately on hover
+	 */
+	$(document).on(
+		'mouseenter',
+		'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
+		function () {
+			var menuId = $(this).attr('id');
+			cancelClose(menuId);
+			menuIds.forEach(function (id) {
+				if (id !== menuId) {
+					clearKeepOpenState(id);
+				}
+			});
+		},
+	);
+
+	/**
+	 * Open the Related menu on click without navigating
+	 */
+	$(document).on('click', '#wp-admin-bar-related > .ab-item', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		var menuId = 'wp-admin-bar-related';
+		cancelClose(menuId);
+		$('#' + menuId).addClass('hover');
+		menuIds.forEach(function (id) {
+			if (id !== menuId) {
+				clearKeepOpenState(id);
+			}
+		});
+	});
 
 	/**
 	 * Initialize menu state on page load

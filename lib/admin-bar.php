@@ -94,6 +94,23 @@ function elodin_recently_edited_get_current_post_type() {
 }
 
 /**
+ * Get a fallback admin URL for a post type.
+ *
+ * @since 0.1
+ *
+ * @param string $post_type Post type slug.
+ * @return string Admin URL for the post type list.
+ */
+function elodin_recently_edited_get_post_type_admin_url( $post_type ) {
+	$admin_url = admin_url( 'edit.php?post_type=' . $post_type );
+	if ( $post_type === 'post' ) {
+		$admin_url = admin_url( 'edit.php' );
+	}
+
+	return $admin_url;
+}
+
+/**
  * Add a menu with posts to the WordPress admin bar.
  *
  * @since 0.1
@@ -105,10 +122,12 @@ function elodin_recently_edited_get_current_post_type() {
  * @param array        $recent_posts Recent posts list.
  * @param array        $pinned_ids Pinned post IDs.
  * @param int|null     $position Menu position.
+ * @param array        $extra_items Extra submenu items to show before posts.
+ * @param string|null  $main_href_override Override main menu href.
  * @return void
  */
-function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, $pinned_posts, $recent_posts, $pinned_ids, $position = null ) {
-	if ( empty( $recent_posts ) && empty( $pinned_posts ) ) {
+function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, $pinned_posts, $recent_posts, $pinned_ids, $position = null, $extra_items = array(), $main_href_override = null, $menu_class = '' ) {
+	if ( empty( $recent_posts ) && empty( $pinned_posts ) && empty( $extra_items ) ) {
 		return;
 	}
 
@@ -140,6 +159,10 @@ function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, 
 		$main_href = elodin_recently_edited_get_view_link( get_post( $most_recent_post_id ) );
 	}
 
+	if ( null !== $main_href_override ) {
+		$main_href = $main_href_override;
+	}
+
 	// Add main menu item with proper escaping
 	$menu_args = array(
 		'id'     => $menu_id,
@@ -148,11 +171,37 @@ function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, 
 		'parent' => 'top-secondary',
 	);
 
+	if ( ! empty( $menu_class ) ) {
+		$menu_args['meta'] = array( 'class' => $menu_class );
+	}
+
 	if ( null !== $position ) {
 		$menu_args['position'] = $position;
 	}
 
 	$wp_admin_bar->add_menu( $menu_args );
+
+	// Add extra submenu items before post list
+	if ( ! empty( $extra_items ) ) {
+		foreach ( $extra_items as $extra_item ) {
+			if ( ! is_array( $extra_item ) || empty( $extra_item['id'] ) ) {
+				continue;
+			}
+
+			$extra_args = array(
+				'id'     => $menu_id . '-' . $extra_item['id'],
+				'parent' => $menu_id,
+				'title'  => $extra_item['title'],
+				'href'   => isset( $extra_item['href'] ) ? $extra_item['href'] : '#',
+			);
+
+			if ( ! empty( $extra_item['meta'] ) ) {
+				$extra_args['meta'] = $extra_item['meta'];
+			}
+
+			$wp_admin_bar->add_menu( $extra_args );
+		}
+	}
 
 	// Add submenu items
 	$count = 0;
@@ -340,7 +389,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	elodin_recently_edited_add_menu(
 		$wp_admin_bar,
 		'recently-edited',
-		esc_html__( 'Recently Edited', 'elodin-recently-edited' ),
+		'<span class="elodin-recently-edited-menu-star" aria-hidden="true">★</span> ' . esc_html__( 'Recently Edited', 'elodin-recently-edited' ),
 		$pinned_posts,
 		$recent_posts,
 		$pinned_ids,
@@ -348,6 +397,33 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	);
 
 	$current_post_type = elodin_recently_edited_get_current_post_type();
+	$post_type_items   = array();
+	$post_type_links   = array();
+
+	$post_types = get_post_types( array( 'public' => true, 'show_ui' => true ), 'objects' );
+	foreach ( $post_types as $pt_slug => $pt_obj ) {
+		if ( ! current_user_can( $pt_obj->cap->edit_posts ) ) {
+			continue;
+		}
+
+		$href = elodin_recently_edited_get_post_type_admin_url( $pt_slug );
+
+		$type_classes = 'elodin-related-pill';
+		if ( $pt_slug === $current_post_type ) {
+			$type_classes .= ' is-current';
+		}
+
+		$post_type_links[] = '<a class="' . esc_attr( $type_classes ) . '" href="' . esc_url( $href ) . '">' . esc_html( $pt_obj->labels->singular_name ) . '</a>';
+	}
+
+	if ( ! empty( $post_type_links ) ) {
+		$post_type_items[] = array(
+			'id'    => 'types',
+			'title' => '<div class="elodin-related-pill-band">' . implode( '', $post_type_links ) . '</div>',
+			'href'  => false,
+			'meta'  => array( 'class' => 'elodin-related-pill-item' ),
+		);
+	}
 
 	$related_pinned_posts = array();
 	if ( ! empty( $pinned_ids ) ) {
@@ -368,11 +444,25 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			'post_type'      => $current_post_type,
 			'post_status'    => 'any',
 			'posts_per_page' => 20,
-			'orderby'        => 'modified',
-			'order'          => 'DESC',
+			'orderby'        => array(
+				'menu_order' => 'ASC',
+				'modified'   => 'DESC',
+			),
 			'no_found_rows'  => true, // Performance optimization
 		)
 	);
+
+	$related_unique_ids = array();
+	foreach ( array_merge( $related_pinned_posts, $related_recent_posts ) as $post ) {
+		if ( is_a( $post, 'WP_Post' ) ) {
+			$related_unique_ids[ $post->ID ] = true;
+		}
+	}
+
+	$related_menu_class = 'elodin-related-menu';
+	if ( count( $related_unique_ids ) < 10 ) {
+		$related_menu_class .= ' elodin-related-short';
+	}
 
 	elodin_recently_edited_add_menu(
 		$wp_admin_bar,
@@ -381,6 +471,9 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		$related_pinned_posts,
 		$related_recent_posts,
 		$pinned_ids,
-		998
+		998,
+		$post_type_items,
+		'#',
+		$related_menu_class
 	);
 }
