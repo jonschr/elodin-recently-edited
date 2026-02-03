@@ -12,7 +12,7 @@
 	Plugin Name: Recently Edited Quick Links
 	Plugin URI: https://elod.in
 	Description: Adds a quick access menu to the WordPress admin bar showing recently edited posts with status management and pinning functionality.
-	Version: 1.0
+	Version: 1.0.1
 	Author: Jon Schroeder
 	Author URI: https://elod.in
 	License: GPL-2.0+
