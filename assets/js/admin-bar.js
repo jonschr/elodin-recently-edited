@@ -6,25 +6,46 @@
  */
 
 jQuery(function ($) {
-	function clearKeepOpenState() {
-		sessionStorage.removeItem('elodin_recently_edited_keep_menu_open');
-		$('#wp-admin-bar-recently-edited').removeClass('hover');
+	var menuIds = ['wp-admin-bar-recently-edited', 'wp-admin-bar-related'];
+
+	function storageKey(menuId) {
+		return menuId === 'wp-admin-bar-related'
+			? 'elodin_related_keep_menu_open'
+			: 'elodin_recently_edited_keep_menu_open';
+	}
+
+	function clearKeepOpenState(menuId) {
+		if (!menuId) {
+			menuIds.forEach(function (id) {
+				clearKeepOpenState(id);
+			});
+			return;
+		}
+		sessionStorage.removeItem(storageKey(menuId));
+		$('#' + menuId).removeClass('hover');
+	}
+
+	function getMenuIdFromElement($element) {
+		var $menu = $element.closest(
+			'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
+		);
+		return $menu.length ? $menu.attr('id') : 'wp-admin-bar-recently-edited';
 	}
 
 	/**
 	 * Check if we should keep the recently edited menu open after page load
 	 */
 	function checkAndRestoreMenuState() {
-		var shouldKeepOpen = sessionStorage.getItem(
-			'elodin_recently_edited_keep_menu_open',
-		);
-		if (shouldKeepOpen === 'true') {
-			// Clear the flag
-			clearKeepOpenState();
+		menuIds.forEach(function (menuId) {
+			var shouldKeepOpen = sessionStorage.getItem(storageKey(menuId));
+			if (shouldKeepOpen === 'true') {
+				// Clear the flag
+				sessionStorage.removeItem(storageKey(menuId));
 
-			// Add hover class to keep menu open
-			$('#wp-admin-bar-recently-edited').addClass('hover');
-		}
+				// Add hover class to keep menu open
+				$('#' + menuId).addClass('hover');
+			}
+		});
 	}
 
 	/**
@@ -39,7 +60,8 @@ jQuery(function ($) {
 		}
 
 		// Set flag to keep menu open after navigation
-		sessionStorage.setItem('elodin_recently_edited_keep_menu_open', 'true');
+		var menuId = getMenuIdFromElement($(this));
+		sessionStorage.setItem(storageKey(menuId), 'true');
 
 		window.location.href = url;
 	});
@@ -49,7 +71,11 @@ jQuery(function ($) {
 	 */
 	$(document).on('click', function (e) {
 		// If click is outside the recently edited menu, remove the keep-open flag
-		if (!$(e.target).closest('#wp-admin-bar-recently-edited').length) {
+		if (
+			!$(e.target).closest(
+				'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
+			).length
+		) {
 			clearKeepOpenState();
 		}
 	});
@@ -59,9 +85,9 @@ jQuery(function ($) {
 	 */
 	$(document).on(
 		'mouseleave',
-		'#wp-admin-bar-recently-edited',
+		'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
 		function () {
-			clearKeepOpenState();
+			clearKeepOpenState($(this).attr('id'));
 		},
 	);
 
@@ -75,7 +101,7 @@ jQuery(function ($) {
 	 */
 	$(document).on(
 		'click',
-		'#wp-admin-bar-recently-edited .elodin-recently-edited-pin',
+		'#wp-admin-bar-recently-edited .elodin-recently-edited-pin, #wp-admin-bar-related .elodin-recently-edited-pin',
 		function (e) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -120,7 +146,7 @@ jQuery(function ($) {
 	 */
 	$(document).on(
 		'click',
-		'#wp-admin-bar-recently-edited .ab-submenu a',
+		'#wp-admin-bar-recently-edited .ab-submenu a, #wp-admin-bar-related .ab-submenu a',
 		function (e) {
 			if (
 				$(e.target).is('select.elodin-recently-edited-status-select') ||

@@ -19,70 +19,95 @@ function elodin_recently_edited_get_view_link( $post ) {
 }
 
 /**
- * Check if a post can be viewed on the frontend.
+ * Determine the current post type for related queries.
+ *
+ * Falls back to "page" if the current context does not provide a post type.
  *
  * @since 0.1
  *
- * @param WP_Post $post Post object.
- * @return bool True if post can be viewed on frontend, false otherwise.
+ * @return string Current post type slug.
  */
+function elodin_recently_edited_get_current_post_type() {
+	$default_post_type = 'page';
+	$post_type         = '';
+
+	if ( is_admin() ) {
+		if ( isset( $_GET['post'] ) ) {
+			$post_id = intval( $_GET['post'] );
+			if ( $post_id ) {
+				$post_type = get_post_type( $post_id );
+			}
+		}
+
+		if ( empty( $post_type ) && isset( $_GET['post_type'] ) ) {
+			$post_type = sanitize_key( $_GET['post_type'] );
+		}
+
+		if ( empty( $post_type ) && ! empty( $GLOBALS['typenow'] ) ) {
+			$post_type = $GLOBALS['typenow'];
+		}
+
+		if ( empty( $post_type ) && function_exists( 'get_current_screen' ) ) {
+			$screen = get_current_screen();
+			if ( $screen && ! empty( $screen->post_type ) ) {
+				$post_type = $screen->post_type;
+			}
+		}
+	} else {
+		if ( is_singular() ) {
+			$queried = get_queried_object();
+			if ( $queried instanceof WP_Post ) {
+				$post_type = $queried->post_type;
+			}
+		}
+
+		if ( empty( $post_type ) && is_post_type_archive() ) {
+			$archive_post_type = get_query_var( 'post_type' );
+			if ( is_array( $archive_post_type ) ) {
+				$archive_post_type = reset( $archive_post_type );
+			}
+			if ( is_string( $archive_post_type ) ) {
+				$post_type = $archive_post_type;
+			}
+		}
+
+		if ( empty( $post_type ) && is_home() ) {
+			$post_type = 'post';
+		}
+	}
+
+	if ( empty( $post_type ) ) {
+		$post_type = $default_post_type;
+	}
+
+	$post_type = sanitize_key( $post_type );
+
+	if ( $post_type === 'attachment' ) {
+		$post_type = $default_post_type;
+	}
+
+	if ( ! get_post_type_object( $post_type ) ) {
+		$post_type = $default_post_type;
+	}
+
+	return $post_type;
+}
+
 /**
- * Add recently edited posts menu to the WordPress admin bar.
+ * Add a menu with posts to the WordPress admin bar.
  *
  * @since 0.1
  *
  * @param WP_Admin_Bar $wp_admin_bar Admin bar object.
+ * @param string       $menu_id Menu id.
+ * @param string       $menu_title Menu title.
+ * @param array        $pinned_posts Pinned posts list.
+ * @param array        $recent_posts Recent posts list.
+ * @param array        $pinned_ids Pinned post IDs.
+ * @param int|null     $position Menu position.
+ * @return void
  */
-function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
-	// Validate admin bar object
-	if ( ! is_a( $wp_admin_bar, 'WP_Admin_Bar' ) ) {
-		return;
-	}
-
-	$user_id = get_current_user_id();
-
-	// Ensure we have a valid user
-	if ( ! $user_id ) {
-		return;
-	}
-
-	// Get pinned posts with proper validation
-	$pinned_ids = get_user_meta( $user_id, 'elodin_recently_edited_pins', true );
-	if ( ! is_array( $pinned_ids ) ) {
-		$pinned_ids = array();
-	}
-
-	// Sanitize pinned IDs
-	$pinned_ids = array_map( 'intval', $pinned_ids );
-	$pinned_ids = array_filter( $pinned_ids );
-
-	$pinned_posts = array();
-	if ( ! empty( $pinned_ids ) ) {
-		$pinned_posts = get_posts(
-			array(
-				'post_type'      => 'any',
-				'post__in'       => $pinned_ids,
-				'orderby'        => 'post__in',
-				'post_status'    => 'any',
-				'posts_per_page' => 20,
-				'no_found_rows'  => true, // Performance optimization
-			)
-		);
-	}
-
-	// Get recent posts with security considerations
-	$args = array(
-		'post_type'           => 'any',
-		'post_type__not_in'   => array( 'attachment' ), // Exclude media attachments
-		'post_status'         => 'any',
-		'posts_per_page'      => 20, // Get more to account for filtering
-		'orderby'             => 'modified',
-		'order'               => 'DESC',
-		'no_found_rows'       => true, // Performance optimization
-	);
-
-	$recent_posts = get_posts( $args );
-
+function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, $pinned_posts, $recent_posts, $pinned_ids, $position = null ) {
 	if ( empty( $recent_posts ) && empty( $pinned_posts ) ) {
 		return;
 	}
@@ -116,14 +141,18 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	}
 
 	// Add main menu item with proper escaping
-	$wp_admin_bar->add_menu(
-		array(
-			'id'     => 'recently-edited',
-			'title'  => esc_html__( 'Recently Edited', 'elodin-recently-edited' ),
-			'href'   => esc_url( $main_href ),
-			'parent' => 'top-secondary',
-		)
+	$menu_args = array(
+		'id'     => $menu_id,
+		'title'  => $menu_title,
+		'href'   => esc_url( $main_href ),
+		'parent' => 'top-secondary',
 	);
+
+	if ( null !== $position ) {
+		$menu_args['position'] = $position;
+	}
+
+	$wp_admin_bar->add_menu( $menu_args );
 
 	// Add submenu items
 	$count = 0;
@@ -206,22 +235,22 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		// Determine the URL for the title link
 		// Link to frontend unless post type has no singular template or status is draft/pending
 		$post_type_obj = get_post_type_object( $post->post_type );
-		
+
 		// Check if post type has singular templates
 		// Some post types might be registered with publicly_queryable=false but still have templates
 		$has_singular_template = false;
-		if ($post_type_obj) {
+		if ( $post_type_obj ) {
 			// Standard WordPress post types that should have singular templates
-			$standard_public_types = array('post', 'page');
-			if (in_array($post->post_type, $standard_public_types, true)) {
+			$standard_public_types = array( 'post', 'page' );
+			if ( in_array( $post->post_type, $standard_public_types, true ) ) {
 				$has_singular_template = true;
-			} elseif (isset($post_type_obj->publicly_queryable) && $post_type_obj->publicly_queryable) {
+			} elseif ( isset( $post_type_obj->publicly_queryable ) && $post_type_obj->publicly_queryable ) {
 				$has_singular_template = true;
 			}
 		}
-		
+
 		$is_draft_or_pending = in_array( $post->post_status, array( 'draft', 'pending' ), true );
-		
+
 		$title_url = ( $has_singular_template && ! $is_draft_or_pending ) ? $view_url : $edit_url;
 
 		// Add class for non-published posts
@@ -240,12 +269,118 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			. '</span>'
 			. '</span>';
 
-		$wp_admin_bar->add_menu( array(
-			'id'     => 'recently-edited-' . $post->ID,
-			'parent' => 'recently-edited',
-			'title'  => $row,
-			'href'   => '#',
-		) );
+		$wp_admin_bar->add_menu(
+			array(
+				'id'     => $menu_id . '-' . $post->ID,
+				'parent' => $menu_id,
+				'title'  => $row,
+				'href'   => '#',
+			)
+		);
 	}
 }
 
+/**
+ * Add recently edited posts menu to the WordPress admin bar.
+ *
+ * @since 0.1
+ *
+ * @param WP_Admin_Bar $wp_admin_bar Admin bar object.
+ */
+function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
+	// Validate admin bar object
+	if ( ! is_a( $wp_admin_bar, 'WP_Admin_Bar' ) ) {
+		return;
+	}
+
+	$user_id = get_current_user_id();
+
+	// Ensure we have a valid user
+	if ( ! $user_id ) {
+		return;
+	}
+
+	// Get pinned posts with proper validation
+	$pinned_ids = get_user_meta( $user_id, 'elodin_recently_edited_pins', true );
+	if ( ! is_array( $pinned_ids ) ) {
+		$pinned_ids = array();
+	}
+
+	// Sanitize pinned IDs
+	$pinned_ids = array_map( 'intval', $pinned_ids );
+	$pinned_ids = array_filter( $pinned_ids );
+
+	$pinned_posts = array();
+	if ( ! empty( $pinned_ids ) ) {
+		$pinned_posts = get_posts(
+			array(
+				'post_type'      => 'any',
+				'post__in'       => $pinned_ids,
+				'orderby'        => 'post__in',
+				'post_status'    => 'any',
+				'posts_per_page' => 20,
+				'no_found_rows'  => true, // Performance optimization
+			)
+		);
+	}
+
+	// Get recent posts with security considerations
+	$args = array(
+		'post_type'           => 'any',
+		'post_type__not_in'   => array( 'attachment' ), // Exclude media attachments
+		'post_status'         => 'any',
+		'posts_per_page'      => 20, // Get more to account for filtering
+		'orderby'             => 'modified',
+		'order'               => 'DESC',
+		'no_found_rows'       => true, // Performance optimization
+	);
+
+	$recent_posts = get_posts( $args );
+
+	elodin_recently_edited_add_menu(
+		$wp_admin_bar,
+		'recently-edited',
+		esc_html__( 'Recently Edited', 'elodin-recently-edited' ),
+		$pinned_posts,
+		$recent_posts,
+		$pinned_ids,
+		999
+	);
+
+	$current_post_type = elodin_recently_edited_get_current_post_type();
+
+	$related_pinned_posts = array();
+	if ( ! empty( $pinned_ids ) ) {
+		$related_pinned_posts = get_posts(
+			array(
+				'post_type'      => $current_post_type,
+				'post__in'       => $pinned_ids,
+				'orderby'        => 'post__in',
+				'post_status'    => 'any',
+				'posts_per_page' => 20,
+				'no_found_rows'  => true, // Performance optimization
+			)
+		);
+	}
+
+	$related_recent_posts = get_posts(
+		array(
+			'post_type'      => $current_post_type,
+			'post_status'    => 'any',
+			'posts_per_page' => 20,
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
+			'no_found_rows'  => true, // Performance optimization
+		)
+	);
+
+	elodin_recently_edited_add_menu(
+		$wp_admin_bar,
+		'related',
+		esc_html__( 'Related', 'elodin-recently-edited' ),
+		$related_pinned_posts,
+		$related_recent_posts,
+		$pinned_ids,
+		998
+	);
+}
