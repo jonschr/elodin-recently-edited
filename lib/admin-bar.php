@@ -433,7 +433,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 				'post__in'       => $pinned_ids,
 				'orderby'        => 'post__in',
 				'post_status'    => 'any',
-				'posts_per_page' => 20,
+				'posts_per_page' => 200,
 				'no_found_rows'  => true, // Performance optimization
 			)
 		);
@@ -443,7 +443,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		array(
 			'post_type'      => $current_post_type,
 			'post_status'    => 'any',
-			'posts_per_page' => 20,
+			'posts_per_page' => 200,
 			'orderby'        => array(
 				'menu_order' => 'ASC',
 				'modified'   => 'DESC',
