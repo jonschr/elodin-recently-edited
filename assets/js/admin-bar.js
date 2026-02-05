@@ -16,6 +16,12 @@ jQuery(function ($) {
 			: 'elodin_recently_edited_keep_menu_open';
 	}
 
+	function scrollStorageKey(menuId) {
+		return menuId === 'wp-admin-bar-related'
+			? 'elodin_related_scroll_top'
+			: 'elodin_recently_edited_scroll_top';
+	}
+
 	function normalizeSearchText(value) {
 		return (value || '').toString().toLowerCase().trim();
 	}
@@ -54,6 +60,45 @@ jQuery(function ($) {
 			clearTimeout(closeTimers[menuId]);
 			delete closeTimers[menuId];
 		}
+	}
+
+	function getSubmenu($menu) {
+		return $menu.find('> .ab-sub-wrapper > .ab-submenu');
+	}
+
+	function saveScrollPosition(menuId) {
+		var $menu = $('#' + menuId);
+		if (!$menu.length) {
+			return;
+		}
+		var $submenu = getSubmenu($menu);
+		if (!$submenu.length) {
+			return;
+		}
+		sessionStorage.setItem(
+			scrollStorageKey(menuId),
+			String($submenu.scrollTop()),
+		);
+	}
+
+	function restoreScrollPosition(menuId) {
+		var $menu = $('#' + menuId);
+		if (!$menu.length) {
+			return;
+		}
+		var $submenu = getSubmenu($menu);
+		if (!$submenu.length) {
+			return;
+		}
+		var stored = sessionStorage.getItem(scrollStorageKey(menuId));
+		if (!stored) {
+			return;
+		}
+		var value = parseInt(stored, 10);
+		if (Number.isNaN(value)) {
+			return;
+		}
+		$submenu.scrollTop(value);
 	}
 
 	function scheduleClose(menuId) {
@@ -98,6 +143,9 @@ jQuery(function ($) {
 
 				// Add hover class to keep menu open
 				$('#' + menuId).addClass('hover');
+				window.setTimeout(function () {
+					restoreScrollPosition(menuId);
+				}, 0);
 			}
 		});
 	}
@@ -120,6 +168,7 @@ jQuery(function ($) {
 
 		// Set flag to keep menu open after navigation
 		var menuId = getMenuIdFromElement($(this));
+		saveScrollPosition(menuId);
 		sessionStorage.setItem(storageKey(menuId), 'true');
 
 		window.location.href = url;
@@ -187,6 +236,7 @@ jQuery(function ($) {
 		var menuId = 'wp-admin-bar-related';
 		cancelClose(menuId);
 		$('#' + menuId).addClass('hover');
+		restoreScrollPosition(menuId);
 		menuIds.forEach(function (id) {
 			if (id !== menuId) {
 				clearKeepOpenState(id);
@@ -255,6 +305,22 @@ jQuery(function ($) {
 	 * Initialize menu state on page load
 	 */
 	checkAndRestoreMenuState();
+
+	/**
+	 * Persist scroll position while scrolling
+	 */
+	$('#wp-admin-bar-recently-edited .ab-submenu, #wp-admin-bar-related .ab-submenu').on(
+		'scroll',
+		function () {
+			var $menu = $(this).closest(
+				'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
+			);
+			if (!$menu.length) {
+				return;
+			}
+			saveScrollPosition($menu.attr('id'));
+		},
+	);
 
 	/**
 	 * Handle pin/unpin toggle for posts
