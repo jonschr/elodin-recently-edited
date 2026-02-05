@@ -181,6 +181,24 @@ function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, 
 
 	$wp_admin_bar->add_menu( $menu_args );
 
+	$search_placeholder = ( 'related' === $menu_id )
+		? esc_attr__( 'Search related...', 'elodin-recently-edited' )
+		: esc_attr__( 'Search recently edited...', 'elodin-recently-edited' );
+	$search_item        = array(
+		'id'    => 'search',
+		'title' => '<div class="elodin-recently-edited-search"><input class="elodin-recently-edited-search-input" type="search" placeholder="' . $search_placeholder . '" aria-label="' . $search_placeholder . '" /></div>',
+		'href'  => false,
+		'meta'  => array( 'class' => 'elodin-recently-edited-search-item' ),
+	);
+	$no_matches_item    = array(
+		'id'    => 'no-matches',
+		'title' => '<div class="elodin-recently-edited-no-matches-label">' . esc_html__( 'No matches found', 'elodin-recently-edited' ) . '</div>',
+		'href'  => false,
+		'meta'  => array( 'class' => 'elodin-recently-edited-no-matches' ),
+	);
+
+	$extra_items = array_merge( array( $search_item ), $extra_items, array( $no_matches_item ) );
+
 	// Add extra submenu items before post list
 	if ( ! empty( $extra_items ) ) {
 		foreach ( $extra_items as $extra_item ) {
@@ -232,11 +250,18 @@ function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, 
 
 		$view_url = elodin_recently_edited_get_view_link( $post );
 
-		// Limit to 50 items
-		if ( $count >= 50 ) {
-			break;
+	$max_items = 200;
+	// Limit to a reasonable number of items for performance
+	if ( $count >= $max_items ) {
+		break;
+	}
+	$count++;
+
+		$search_text = wp_strip_all_tags( $post->post_title );
+		if ( '' === trim( $search_text ) ) {
+			$search_text = __( '(no title)', 'elodin-recently-edited' );
 		}
-		$count++;
+		$search_text = trim( $search_text ) . ' ' . $post->ID;
 
 		// Process post title with proper sanitization
 		$title = $post->post_title;
@@ -302,20 +327,51 @@ function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, 
 
 		$title_url = ( $has_singular_template && ! $is_draft_or_pending ) ? $view_url : $edit_url;
 
+		$date_format   = 'n/j/y';
+		$published_raw = get_post_time( 'U', false, $post );
+		$modified_raw  = get_post_modified_time( 'U', false, $post );
+		$published     = $published_raw ? date_i18n( $date_format, $published_raw ) : '';
+		$modified      = $modified_raw ? date_i18n( $date_format, $modified_raw ) : '';
+		$author_name   = '';
+		$editor_name   = '';
+
+		$author = get_userdata( $post->post_author );
+		if ( $author ) {
+			$author_name = $author->display_name;
+		}
+
+		$last_editor_id = get_post_meta( $post->ID, '_edit_last', true );
+		if ( $last_editor_id ) {
+			$last_editor = get_userdata( intval( $last_editor_id ) );
+			if ( $last_editor ) {
+				$editor_name = $last_editor->display_name;
+			}
+		}
+
+		$published_title = __( 'Published', 'elodin-recently-edited' );
+		if ( $author_name ) {
+			$published_title .= ': ' . $author_name;
+		}
+		$modified_title = __( 'Last edited', 'elodin-recently-edited' );
+		if ( $editor_name ) {
+			$modified_title .= ': ' . $editor_name;
+		}
+
 		// Add class for non-published posts
 		$row_class = $post->post_status === 'publish' ? 'elodin-recently-edited-row' : 'elodin-recently-edited-row elodin-recently-edited-row--not-published';
 
 		// Build menu item HTML with proper escaping
-		$row = '<span class="' . esc_attr( $row_class ) . '">'
+		$row = '<span class="' . esc_attr( $row_class ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
+			. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="' . esc_attr__( 'Pin', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
 			. '<span class="elodin-recently-edited-title">'
 			. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '">' . $title . '</span>'
 			. '</span>'
-			. '<span class="elodin-recently-edited-actions">'
 			. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
 			. '<select class="elodin-recently-edited-status-select" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
 			. '<select class="elodin-recently-edited-post-type-select" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_type ) . '">' . $post_type_options . '</select>'
-			. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="' . esc_attr__( 'Pin', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
-			. '</span>'
+			. '<span class="elodin-recently-edited-published" title="' . esc_attr( $published_title ) . '">' . esc_html( $published ) . '</span>'
+			. '<span class="elodin-recently-edited-modified" title="' . esc_attr( $modified_title ) . '">' . esc_html( $modified ) . '</span>'
+			. '<span class="elodin-recently-edited-id" data-id="' . intval( $post->ID ) . '">' . intval( $post->ID ) . '</span>'
 			. '</span>';
 
 		$wp_admin_bar->add_menu(
@@ -378,7 +434,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		'post_type'           => 'any',
 		'post_type__not_in'   => array( 'attachment' ), // Exclude media attachments
 		'post_status'         => 'any',
-		'posts_per_page'      => 20, // Get more to account for filtering
+		'posts_per_page'      => 200, // Get more to account for filtering
 		'orderby'             => 'modified',
 		'order'               => 'DESC',
 		'no_found_rows'       => true, // Performance optimization
@@ -405,6 +461,15 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		if ( ! current_user_can( $pt_obj->cap->edit_posts ) ) {
 			continue;
 		}
+		if ( 'attachment' === $pt_slug ) {
+			continue;
+		}
+
+		$count_obj = wp_count_posts( $pt_slug );
+		$published_count = 0;
+		if ( $count_obj && isset( $count_obj->publish ) ) {
+			$published_count = intval( $count_obj->publish );
+		}
 
 		$href = elodin_recently_edited_get_post_type_admin_url( $pt_slug );
 
@@ -413,7 +478,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			$type_classes .= ' is-current';
 		}
 
-		$post_type_links[] = '<a class="' . esc_attr( $type_classes ) . '" href="' . esc_url( $href ) . '">' . esc_html( $pt_obj->labels->singular_name ) . '</a>';
+		$post_type_links[] = '<a class="' . esc_attr( $type_classes ) . '" href="' . esc_url( $href ) . '" title="' . esc_attr( $pt_slug ) . '">' . esc_html( $pt_obj->labels->name ) . '<span class="elodin-related-pill-count">' . number_format_i18n( $published_count ) . '</span></a>';
 	}
 
 	if ( ! empty( $post_type_links ) ) {

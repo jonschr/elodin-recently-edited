@@ -16,6 +16,39 @@ jQuery(function ($) {
 			: 'elodin_recently_edited_keep_menu_open';
 	}
 
+	function normalizeSearchText(value) {
+		return (value || '').toString().toLowerCase().trim();
+	}
+
+	function filterMenuItems($menu, query) {
+		var normalized = normalizeSearchText(query);
+		var matchCount = 0;
+		$menu.find('.elodin-recently-edited-row').each(function () {
+			var $row = $(this);
+			var searchText = $row.attr('data-search-text') || $row.text();
+			var matches =
+				normalized === '' ||
+				normalizeSearchText(searchText).indexOf(normalized) !== -1;
+			if (matches && normalized !== '') {
+				matchCount += 1;
+			}
+			$row.closest('li').toggle(matches);
+		});
+
+		var $noMatchesItem = $menu.find('.elodin-recently-edited-no-matches');
+		if (normalized === '') {
+			$noMatchesItem.hide();
+		} else {
+			$noMatchesItem.toggle(matchCount === 0);
+		}
+	}
+
+	function getOpenMenu() {
+		return $(
+			'#wp-admin-bar-recently-edited.hover, #wp-admin-bar-related.hover',
+		).first();
+	}
+
 	function cancelClose(menuId) {
 		if (closeTimers[menuId]) {
 			clearTimeout(closeTimers[menuId]);
@@ -77,6 +110,11 @@ jQuery(function ($) {
 		e.stopPropagation();
 		var url = $(this).data('url');
 		if (!url || url === '#') {
+			return;
+		}
+
+		if (e.metaKey || e.ctrlKey) {
+			window.open(url, '_blank', 'noopener');
 			return;
 		}
 
@@ -154,6 +192,63 @@ jQuery(function ($) {
 				clearKeepOpenState(id);
 			}
 		});
+	});
+
+	/**
+	 * Filter menu items based on search input
+	 */
+	$(document).on(
+		'input',
+		'.elodin-recently-edited-search-input',
+		function (e) {
+			e.preventDefault();
+			e.stopPropagation();
+			var $input = $(this);
+			var menuId = getMenuIdFromElement($input);
+			filterMenuItems($('#' + menuId), $input.val());
+		},
+	);
+
+	$(document).on(
+		'click',
+		'.elodin-recently-edited-search-input',
+		function (e) {
+			e.preventDefault();
+			e.stopPropagation();
+		},
+	);
+
+	$(document).on('keydown', function (e) {
+		if (e.metaKey || e.ctrlKey || e.altKey) {
+			return;
+		}
+
+		if (e.key.length !== 1) {
+			return;
+		}
+
+		if (
+			$(e.target).is('input, textarea, select') ||
+			$(e.target).closest('[contenteditable="true"]').length
+		) {
+			return;
+		}
+
+		var $menu = getOpenMenu();
+		if (!$menu.length) {
+			return;
+		}
+
+		var $input = $menu.find('.elodin-recently-edited-search-input').first();
+		if (!$input.length) {
+			return;
+		}
+
+		var nextValue = ($input.val() || '') + e.key;
+		$input.val(nextValue);
+		filterMenuItems($menu, nextValue);
+		$input.focus();
+		e.preventDefault();
 	});
 
 	/**
@@ -242,6 +337,50 @@ jQuery(function ($) {
 			e.stopPropagation();
 		},
 	);
+
+	/**
+	 * Copy post ID on click and show feedback
+	 */
+	$(document).on('click', '.elodin-recently-edited-id', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		var $id = $(this);
+		var postId = $id.data('id');
+		if (!postId) {
+			return;
+		}
+
+		var originalText = $id.text();
+		var copyText = String(postId);
+
+		function showCopied() {
+			$id.text('Copied');
+			window.setTimeout(function () {
+				$id.text(originalText);
+			}, 900);
+		}
+
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			navigator.clipboard
+				.writeText(copyText)
+				.then(showCopied)
+				.catch(function () {
+					showCopied();
+				});
+		} else {
+			var tempInput = $('<input>')
+				.val(copyText)
+				.appendTo('body')
+				.select();
+			try {
+				document.execCommand('copy');
+			} catch (err) {
+				// no-op fallback
+			}
+			tempInput.remove();
+			showCopied();
+		}
+	});
 
 	/**
 	 * Handle status change for posts
