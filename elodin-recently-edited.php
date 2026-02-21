@@ -123,19 +123,12 @@ function elodin_recently_edited_block_editor_assets() {
 			if (store.select.isFeatureActive('fullscreenMode')) {
 				store.dispatch.toggleFeature('fullscreenMode');
 			}
-			if (store.select.isFeatureActive('distractionFree')) {
-				store.dispatch.toggleFeature('distractionFree');
-			}
 		});
-		if (wp.data.dispatch && wp.data.dispatch('core/preferences')) {
-			['core/edit-post', 'core/edit-site'].forEach(function (storeName) {
-				wp.data
-					.dispatch('core/preferences')
-					.set(storeName, 'fullscreenMode', false);
-				wp.data
-					.dispatch('core/preferences')
-					.set(storeName, 'distractionFree', false);
-			});
+		var preferencesDispatch =
+			wp.data.dispatch && wp.data.dispatch('core/preferences');
+		if (preferencesDispatch && typeof preferencesDispatch.set === 'function') {
+			preferencesDispatch.set('core', 'fullscreenMode', false);
+			preferencesDispatch.set('core', 'distractionFree', false);
 		}
 	}
 
