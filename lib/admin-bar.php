@@ -19,6 +19,103 @@ function elodin_recently_edited_get_view_link( $post ) {
 }
 
 /**
+ * Get normalized slug for a wp_template post.
+ *
+ * Template post names can include a theme namespace (for example "theme//single-page").
+ *
+ * @since 1.2.2
+ *
+ * @param WP_Post $post Post object.
+ * @return string Normalized template slug.
+ */
+function elodin_recently_edited_get_template_slug( $post ) {
+	$slug = is_a( $post, 'WP_Post' ) ? (string) $post->post_name : '';
+	if ( '' === $slug ) {
+		return '';
+	}
+
+	if ( false !== strpos( $slug, '//' ) ) {
+		$parts = explode( '//', $slug );
+		$slug  = (string) end( $parts );
+	}
+
+	return sanitize_title( $slug );
+}
+
+/**
+ * Determine whether a post should be shown in Recently Edited/Related menus.
+ *
+ * Defaults wp_template entries to off unless they are singular templates.
+ *
+ * @since 1.2.2
+ *
+ * @param WP_Post $post Post object.
+ * @return bool
+ */
+function elodin_recently_edited_should_include_post( $post ) {
+	if ( ! is_a( $post, 'WP_Post' ) ) {
+		return false;
+	}
+
+	if ( 'attachment' === $post->post_type ) {
+		return false;
+	}
+
+	if ( 'wp_template' !== $post->post_type ) {
+		return true;
+	}
+
+	$template_slug = elodin_recently_edited_get_template_slug( $post );
+	if ( '' === $template_slug ) {
+		return false;
+	}
+
+	$allowed_prefixes = array( 'page', 'single', 'singular' );
+	$is_singular      = false;
+
+	foreach ( $allowed_prefixes as $prefix ) {
+		if ( $template_slug === $prefix || 0 === strpos( $template_slug, $prefix . '-' ) ) {
+			$is_singular = true;
+			break;
+		}
+	}
+
+	/**
+	 * Filter whether a wp_template post should be included in menu lists.
+	 *
+	 * @since 1.2.2
+	 *
+	 * @param bool    $is_singular  Whether the template matches singular defaults.
+	 * @param WP_Post $post         Post object.
+	 * @param string  $template_slug Normalized template slug.
+	 */
+	return (bool) apply_filters( 'elodin_recently_edited_include_wp_template', $is_singular, $post, $template_slug );
+}
+
+/**
+ * Filter a post list to entries that should appear in plugin menus.
+ *
+ * @since 1.2.2
+ *
+ * @param array $posts List of post objects.
+ * @return array
+ */
+function elodin_recently_edited_filter_menu_posts( $posts ) {
+	if ( ! is_array( $posts ) ) {
+		return array();
+	}
+
+	$filtered = array();
+	foreach ( $posts as $post ) {
+		if ( elodin_recently_edited_should_include_post( $post ) ) {
+			$filtered[] = $post;
+		}
+	}
+
+	return $filtered;
+}
+
+/**
  * Determine the current post type for related queries.
  *
  * Falls back to "page" if the current context does not provide a post type.
@@ -137,8 +234,7 @@ function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, 
 	$all_posts_for_link   = array_merge( $pinned_posts, $recent_posts );
 
 	foreach ( $all_posts_for_link as $post ) {
-		// Skip attachments and validate post object
-		if ( ! is_a( $post, 'WP_Post' ) || $post->post_type === 'attachment' ) {
+		if ( ! elodin_recently_edited_should_include_post( $post ) ) {
 			continue;
 		}
 
@@ -227,8 +323,7 @@ function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, 
 	$seen_ids = array();
 
 	foreach ( $all_posts as $post ) {
-		// Validate post object and skip attachments
-		if ( ! is_a( $post, 'WP_Post' ) || $post->post_type === 'attachment' ) {
+		if ( ! elodin_recently_edited_should_include_post( $post ) ) {
 			continue;
 		}
 
@@ -393,6 +488,10 @@ function elodin_recently_edited_add_menu( $wp_admin_bar, $menu_id, $menu_title, 
  * @param WP_Admin_Bar $wp_admin_bar Admin bar object.
  */
 function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
+	if ( ! is_admin_bar_showing() ) {
+		return;
+	}
+
 	// Validate admin bar object
 	if ( ! is_a( $wp_admin_bar, 'WP_Admin_Bar' ) ) {
 		return;
@@ -427,6 +526,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 				'no_found_rows'  => true, // Performance optimization
 			)
 		);
+		$pinned_posts = elodin_recently_edited_filter_menu_posts( $pinned_posts );
 	}
 
 	// Get recent posts with security considerations
@@ -441,6 +541,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	);
 
 	$recent_posts = get_posts( $args );
+	$recent_posts = elodin_recently_edited_filter_menu_posts( $recent_posts );
 
 	elodin_recently_edited_add_menu(
 		$wp_admin_bar,
@@ -502,6 +603,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 				'no_found_rows'  => true, // Performance optimization
 			)
 		);
+		$related_pinned_posts = elodin_recently_edited_filter_menu_posts( $related_pinned_posts );
 	}
 
 	$related_recent_posts = get_posts(
@@ -516,6 +618,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			'no_found_rows'  => true, // Performance optimization
 		)
 	);
+	$related_recent_posts = elodin_recently_edited_filter_menu_posts( $related_recent_posts );
 
 	$related_unique_ids = array();
 	foreach ( array_merge( $related_pinned_posts, $related_recent_posts ) as $post ) {
