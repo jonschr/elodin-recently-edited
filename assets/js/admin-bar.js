@@ -6,20 +6,20 @@
  */
 
 jQuery(function ($) {
-	var menuIds = ['wp-admin-bar-recently-edited', 'wp-admin-bar-related'];
+	var menuIds = ['wp-admin-bar-recently-edited'];
 	var closeDelayMs = 2000;
 	var closeTimers = {};
 
 	function storageKey(menuId) {
-		return menuId === 'wp-admin-bar-related'
-			? 'elodin_related_keep_menu_open'
-			: 'elodin_recently_edited_keep_menu_open';
+		return 'elodin_recently_edited_keep_menu_open';
 	}
 
 	function scrollStorageKey(menuId) {
-		return menuId === 'wp-admin-bar-related'
-			? 'elodin_related_scroll_top'
-			: 'elodin_recently_edited_scroll_top';
+		return 'elodin_recently_edited_scroll_top';
+	}
+
+	function groupStorageKey(menuId) {
+		return 'elodin_recently_edited_active_group';
 	}
 
 	function normalizeSearchText(value) {
@@ -29,8 +29,16 @@ jQuery(function ($) {
 	function filterMenuItems($menu, query) {
 		var normalized = normalizeSearchText(query);
 		var matchCount = 0;
+		var activeGroup = getActiveGroup($menu);
+
 		$menu.find('.elodin-recently-edited-row').each(function () {
 			var $row = $(this);
+			var $item = $row.closest('li');
+			if ($row.attr('data-related-group') !== activeGroup) {
+				$item.hide();
+				return;
+			}
+
 			var searchText = $row.attr('data-search-text') || $row.text();
 			var matches =
 				normalized === '' ||
@@ -38,7 +46,7 @@ jQuery(function ($) {
 			if (matches && normalized !== '') {
 				matchCount += 1;
 			}
-			$row.closest('li').toggle(matches);
+			$item.toggle(matches);
 		});
 
 		var $noMatchesItem = $menu.find('.elodin-recently-edited-no-matches');
@@ -50,9 +58,7 @@ jQuery(function ($) {
 	}
 
 	function getOpenMenu() {
-		return $(
-			'#wp-admin-bar-recently-edited.hover, #wp-admin-bar-related.hover',
-		).first();
+		return $('#wp-admin-bar-recently-edited.hover').first();
 	}
 
 	function cancelClose(menuId) {
@@ -64,6 +70,47 @@ jQuery(function ($) {
 
 	function getSubmenu($menu) {
 		return $menu.find('> .ab-sub-wrapper > .ab-submenu');
+	}
+
+	function getActiveGroup($menu) {
+		return (
+			$menu.find('.elodin-related-pill.is-active').data('relatedTarget') ||
+			'all'
+		);
+	}
+
+	function switchRelatedGroup($menu, target) {
+		if (!$menu.length || !target) {
+			return;
+		}
+
+		$menu.find('.elodin-related-pill').removeClass('is-active');
+		$menu
+			.find('.elodin-related-pill[data-related-target="' + target + '"]')
+			.addClass('is-active');
+
+		$menu.find('.elodin-recently-edited-list-item').removeClass('is-active');
+		$menu
+			.find(
+				'.elodin-recently-edited-row[data-related-group="' +
+					target +
+					'"]',
+			)
+			.closest('li')
+			.addClass('is-active');
+
+		filterMenuItems(
+			$menu,
+			$menu.find('.elodin-recently-edited-search-input').first().val(),
+		);
+	}
+
+	function saveActiveGroup(menuId) {
+		var $menu = $('#' + menuId);
+		if (!$menu.length) {
+			return;
+		}
+		sessionStorage.setItem(groupStorageKey(menuId), getActiveGroup($menu));
 	}
 
 	function saveScrollPosition(menuId) {
@@ -125,9 +172,7 @@ jQuery(function ($) {
 	}
 
 	function getMenuIdFromElement($element) {
-		var $menu = $element.closest(
-			'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
-		);
+		var $menu = $element.closest('#wp-admin-bar-recently-edited');
 		return $menu.length ? $menu.attr('id') : 'wp-admin-bar-recently-edited';
 	}
 
@@ -138,12 +183,17 @@ jQuery(function ($) {
 		menuIds.forEach(function (menuId) {
 			var shouldKeepOpen = sessionStorage.getItem(storageKey(menuId));
 			if (shouldKeepOpen === 'true') {
+				var storedGroup = sessionStorage.getItem(groupStorageKey(menuId));
 				// Clear the flag
 				sessionStorage.removeItem(storageKey(menuId));
+				sessionStorage.removeItem(groupStorageKey(menuId));
 
 				// Add hover class to keep menu open
 				$('#' + menuId).addClass('hover');
 				window.setTimeout(function () {
+					if (storedGroup) {
+						switchRelatedGroup($('#' + menuId), storedGroup);
+					}
 					restoreScrollPosition(menuId);
 				}, 0);
 			}
@@ -168,6 +218,7 @@ jQuery(function ($) {
 
 		// Set flag to keep menu open after navigation
 		var menuId = getMenuIdFromElement($(this));
+		saveActiveGroup(menuId);
 		saveScrollPosition(menuId);
 		sessionStorage.setItem(storageKey(menuId), 'true');
 
@@ -175,13 +226,37 @@ jQuery(function ($) {
 	});
 
 	/**
-	 * Keep the related menu open after selecting a content type
+	 * Switch content type lists on hover without navigating.
+	 */
+	$(document).on(
+		'mouseenter focus',
+		'#wp-admin-bar-recently-edited .elodin-related-pill',
+		function () {
+			var $pill = $(this);
+			switchRelatedGroup(
+				$('#wp-admin-bar-recently-edited'),
+				$pill.data('relatedTarget'),
+			);
+		},
+	);
+
+	/**
+	 * Keep the menu open after selecting a content type admin link.
 	 */
 	$(document).on(
 		'click',
-		'#wp-admin-bar-related .elodin-related-pill',
-		function () {
-			sessionStorage.setItem(storageKey('wp-admin-bar-related'), 'true');
+		'#wp-admin-bar-recently-edited .elodin-related-pill',
+		function (e) {
+			var href = $(this).attr('href');
+			var menuId = 'wp-admin-bar-recently-edited';
+			saveActiveGroup(menuId);
+			sessionStorage.setItem(storageKey(menuId), 'true');
+			saveScrollPosition(menuId);
+
+			if (!href || href === '#') {
+				e.preventDefault();
+				e.stopPropagation();
+			}
 		},
 	);
 
@@ -190,11 +265,7 @@ jQuery(function ($) {
 	 */
 	$(document).on('click', function (e) {
 		// If click is outside the recently edited menu, remove the keep-open flag
-		if (
-			!$(e.target).closest(
-				'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
-			).length
-		) {
+		if (!$(e.target).closest('#wp-admin-bar-recently-edited').length) {
 			clearKeepOpenState();
 		}
 	});
@@ -204,18 +275,18 @@ jQuery(function ($) {
 	 */
 	$(document).on(
 		'mouseleave',
-		'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
+		'#wp-admin-bar-recently-edited',
 		function () {
 			scheduleClose($(this).attr('id'));
 		},
 	);
 
 	/**
-	 * Close the other menu immediately on hover
+	 * Cancel pending close when the menu is hovered again
 	 */
 	$(document).on(
 		'mouseenter',
-		'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
+		'#wp-admin-bar-recently-edited',
 		function () {
 			var menuId = $(this).attr('id');
 			cancelClose(menuId);
@@ -226,23 +297,6 @@ jQuery(function ($) {
 			});
 		},
 	);
-
-	/**
-	 * Open the Related menu on click without navigating
-	 */
-	$(document).on('click', '#wp-admin-bar-related > .ab-item', function (e) {
-		e.preventDefault();
-		e.stopPropagation();
-		var menuId = 'wp-admin-bar-related';
-		cancelClose(menuId);
-		$('#' + menuId).addClass('hover');
-		restoreScrollPosition(menuId);
-		menuIds.forEach(function (id) {
-			if (id !== menuId) {
-				clearKeepOpenState(id);
-			}
-		});
-	});
 
 	/**
 	 * Filter menu items based on search input
@@ -309,12 +363,10 @@ jQuery(function ($) {
 	/**
 	 * Persist scroll position while scrolling
 	 */
-	$('#wp-admin-bar-recently-edited .ab-submenu, #wp-admin-bar-related .ab-submenu').on(
+	$('#wp-admin-bar-recently-edited .ab-submenu').on(
 		'scroll',
 		function () {
-			var $menu = $(this).closest(
-				'#wp-admin-bar-recently-edited, #wp-admin-bar-related',
-			);
+			var $menu = $(this).closest('#wp-admin-bar-recently-edited');
 			if (!$menu.length) {
 				return;
 			}
@@ -327,7 +379,7 @@ jQuery(function ($) {
 	 */
 	$(document).on(
 		'click',
-		'#wp-admin-bar-recently-edited .elodin-recently-edited-pin, #wp-admin-bar-related .elodin-recently-edited-pin',
+		'#wp-admin-bar-recently-edited .elodin-recently-edited-pin',
 		function (e) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -346,10 +398,15 @@ jQuery(function ($) {
 					if (response.success) {
 						// Toggle the pin visually
 						var isPinned = $pin.hasClass('is-pinned');
+						var $matchingPins = $(
+							'#wp-admin-bar-recently-edited .elodin-recently-edited-pin',
+						).filter(function () {
+							return String($(this).data('postId')) === String(postId);
+						});
 						if (isPinned) {
-							$pin.removeClass('is-pinned').text('☆');
+							$matchingPins.removeClass('is-pinned').text('☆');
 						} else {
-							$pin.addClass('is-pinned').text('★');
+							$matchingPins.addClass('is-pinned').text('★');
 						}
 					} else {
 						alert(
@@ -372,7 +429,7 @@ jQuery(function ($) {
 	 */
 	$(document).on(
 		'click',
-		'#wp-admin-bar-recently-edited .ab-submenu a, #wp-admin-bar-related .ab-submenu a',
+		'#wp-admin-bar-recently-edited .ab-submenu a',
 		function (e) {
 			if (
 				$(e.target).is('select.elodin-recently-edited-status-select') ||

@@ -1,5 +1,4 @@
-#wp-admin-bar-recently-edited,
-#wp-admin-bar-related {
+#wp-admin-bar-recently-edited {
 	.ab-submenu {
 		min-width: 660px;
 		width: auto !important;
@@ -55,6 +54,10 @@
 
 	.elodin-recently-edited-no-matches {
 		display: none;
+	}
+
+	.elodin-recently-edited-list-item:not(.is-active) {
+		display: none !important;
 	}
 
 	.elodin-recently-edited-no-matches-label {
@@ -218,8 +221,7 @@
 	}
 }
 
-#wp-admin-bar-recently-edited .ab-submenu,
-#wp-admin-bar-related .ab-submenu {
+#wp-admin-bar-recently-edited .ab-submenu {
 	min-width: 660px !important;
 	width: auto !important;
 	box-sizing: border-box;
@@ -232,26 +234,17 @@
 }
 
 #wp-admin-bar-recently-edited > .ab-item:hover,
-#wp-admin-bar-recently-edited > .ab-item:focus,
-#wp-admin-bar-related > .ab-item:hover,
-#wp-admin-bar-related > .ab-item:focus {
+#wp-admin-bar-recently-edited > .ab-item:focus {
 	color: #fff !important;
 }
 
-#wp-admin-bar-related {
-	#wpadminbar &.elodin-related-short .ab-submenu {
-		max-height: none !important;
-		overflow-y: visible !important;
-		overflow: visible !important;
-		padding-bottom: 6px !important;
-	}
-
+#wp-admin-bar-recently-edited.elodin-recently-edited-combined-menu {
 	#wpadminbar & .ab-submenu {
 		padding: 0 0 6px !important;
 	}
 
-	#wpadminbar & .ab-submenu .wp-admin-bar-related-default,
-	#wpadminbar & .wp-admin-bar-related-default {
+	#wpadminbar & .ab-submenu .wp-admin-bar-recently-edited-default,
+	#wpadminbar & .wp-admin-bar-recently-edited-default {
 		padding-top: 0 !important;
 	}
 
@@ -308,7 +301,12 @@
 		text-decoration: none !important;
 	}
 
-	.elodin-related-pill.is-current {
+	.elodin-related-pill.is-current:not(.is-active) {
+		border-color: rgba(244, 197, 66, 0.45) !important;
+		color: #fff !important;
+	}
+
+	.elodin-related-pill.is-active {
 		background: rgba(244, 197, 66, 0.18) !important;
 		border-color: rgba(244, 197, 66, 0.7) !important;
 		color: #fff !important;
