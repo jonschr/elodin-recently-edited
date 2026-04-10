@@ -121,21 +121,18 @@ function elodin_recently_edited_update_post_type() {
 
 	// Sanitize and validate inputs
 	$post_id   = isset( $_POST['post_id'] ) ? intval( $_POST['post_id'] ) : 0;
-	$post_type = isset( $_POST['post_type'] ) ? sanitize_text_field( $_POST['post_type'] ) : '';
+	$post_type = isset( $_POST['post_type'] ) ? sanitize_key( $_POST['post_type'] ) : '';
 
 	if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
 		wp_send_json_error( array( 'message' => 'Invalid post.' ), 403 );
 	}
 
-	// Get available post types and validate
-	$post_types = get_post_types( array( 'public' => true, 'show_ui' => true ), 'objects' );
+	// Match the admin-bar post type switcher so visible types can also be selected.
+	$post_types = function_exists( 'elodin_recently_edited_get_switchable_post_types' )
+		? elodin_recently_edited_get_switchable_post_types()
+		: get_post_types( array( 'show_ui' => true ), 'objects' );
 	if ( ! isset( $post_types[ $post_type ] ) ) {
 		wp_send_json_error( array( 'message' => 'Invalid post type.' ), 400 );
-	}
-
-	$pt_obj = $post_types[ $post_type ];
-	if ( ! current_user_can( $pt_obj->cap->create_posts ) ) {
-		wp_send_json_error( array( 'message' => 'Cannot create posts of this type.' ), 403 );
 	}
 
 	// Update post type

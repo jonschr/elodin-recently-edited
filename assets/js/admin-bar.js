@@ -190,7 +190,10 @@ jQuery(function ($) {
 			return;
 		}
 		cancelClose(menuId);
-		$('#' + menuId).addClass('hover');
+		$('#' + menuId).addClass('hover elodin-recently-edited-grace-open');
+		window.setTimeout(function () {
+			$('#' + menuId).addClass('hover elodin-recently-edited-grace-open');
+		}, 0);
 		closeTimers[menuId] = window.setTimeout(function () {
 			clearKeepOpenState(menuId);
 		}, closeDelayMs);
@@ -205,7 +208,7 @@ jQuery(function ($) {
 		}
 		cancelClose(menuId);
 		sessionStorage.removeItem(storageKey(menuId));
-		$('#' + menuId).removeClass('hover');
+		$('#' + menuId).removeClass('hover elodin-recently-edited-grace-open');
 	}
 
 	function getMenuIdFromElement($element) {
@@ -327,6 +330,7 @@ jQuery(function ($) {
 		function () {
 			var menuId = $(this).attr('id');
 			cancelClose(menuId);
+			$(this).removeClass('elodin-recently-edited-grace-open');
 			menuIds.forEach(function (id) {
 				if (id !== menuId) {
 					clearKeepOpenState(id);

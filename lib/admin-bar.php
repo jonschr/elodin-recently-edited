@@ -382,11 +382,8 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	}
 
 	$post_type_options = '';
-	$post_types        = get_post_types( array( 'public' => true, 'show_ui' => true ), 'objects' );
+	$post_types        = elodin_recently_edited_get_switchable_post_types();
 	foreach ( $post_types as $pt_slug => $pt_obj ) {
-		if ( ! current_user_can( $pt_obj->cap->create_posts ) ) {
-			continue;
-		}
 		$selected           = $post->post_type === $pt_slug ? ' selected' : '';
 		$post_type_options .= '<option value="' . esc_attr( $pt_slug ) . '"' . $selected . '>' . esc_html( $pt_obj->labels->singular_name ) . '</option>';
 	}

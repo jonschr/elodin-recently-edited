@@ -242,6 +242,10 @@
 	font-size: 12px;
 }
 
+#wpadminbar #wp-admin-bar-recently-edited.elodin-recently-edited-grace-open > .ab-sub-wrapper {
+	display: block !important;
+}
+
 #wp-admin-bar-recently-edited > .ab-item:hover,
 #wp-admin-bar-recently-edited > .ab-item:focus {
 	color: #fff !important;
