@@ -24,19 +24,21 @@ function elodin_recently_edited_enqueue_assets() {
 	wp_enqueue_script( 'jquery' );
 
 	// Create nonces for AJAX security
-	$nonce_pin      = wp_create_nonce( 'elodin_recently_edited_pin' );
-	$nonce_status   = wp_create_nonce( 'elodin_recently_edited_status' );
+	$nonce_pin       = wp_create_nonce( 'elodin_recently_edited_pin' );
+	$nonce_status    = wp_create_nonce( 'elodin_recently_edited_status' );
 	$nonce_post_type = wp_create_nonce( 'elodin_recently_edited_post_type' );
+	$nonce_title     = wp_create_nonce( 'elodin_recently_edited_title' );
 
 	// Localize script with AJAX URL and nonces
 	wp_localize_script(
 		'jquery',
 		'ElodinRecentlyEdited',
 		array(
-			'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
-			'noncePin'     => $nonce_pin,
-			'nonceStatus'  => $nonce_status,
+			'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+			'noncePin'      => $nonce_pin,
+			'nonceStatus'   => $nonce_status,
 			'noncePostType' => $nonce_post_type,
+			'nonceTitle'    => $nonce_title,
 		)
 	);
 

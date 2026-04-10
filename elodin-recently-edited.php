@@ -57,6 +57,7 @@ add_action( 'wp_enqueue_scripts', 'elodin_recently_edited_enqueue_assets' );
 add_action( 'wp_ajax_elodin_recently_edited_toggle_pin', 'elodin_recently_edited_toggle_pin' );
 add_action( 'wp_ajax_elodin_recently_edited_update_status', 'elodin_recently_edited_update_status' );
 add_action( 'wp_ajax_elodin_recently_edited_update_post_type', 'elodin_recently_edited_update_post_type' );
+add_action( 'wp_ajax_elodin_recently_edited_update_title', 'elodin_recently_edited_update_title' );
 
 // Load Plugin Update Checker with error handling
 $update_checker_file = ELODIN_RECENTLY_EDITED_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php';

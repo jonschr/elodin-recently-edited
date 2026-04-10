@@ -90,12 +90,20 @@
 
 	.elodin-recently-edited-title {
 		grid-column: 2 / 3;
-		display: block;
+		display: flex;
+		align-items: center;
 		min-width: 0;
 		width: 100%;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		cursor: text;
+	}
+
+	.elodin-recently-edited-title::after {
+		content: "";
+		align-self: stretch;
+		flex: 0 0 10px;
 	}
 
 	.elodin-recently-edited-id {
@@ -124,15 +132,37 @@
 	.elodin-recently-edited-title-link {
 		color: #fff;
 		display: block;
-		width: 100%;
-		max-width: 100%;
+		flex: 1 1 auto;
+		min-width: 0;
+		width: auto;
+		max-width: none;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		cursor: pointer;
 	}
 
 	.elodin-recently-edited-title-link:hover {
 		text-decoration: underline;
+	}
+
+	.elodin-recently-edited-title-input {
+		flex: 1 1 auto;
+		min-width: 0;
+		width: 100%;
+		box-sizing: border-box;
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.28);
+		border-radius: 3px;
+		color: #fff;
+		font-size: 12px;
+		line-height: 1;
+		padding: 2px 4px;
+	}
+
+	.elodin-recently-edited-title-input:focus {
+		border-color: rgba(244, 197, 66, 0.72);
+		outline: none;
 	}
 
 	.elodin-recently-edited-action {
@@ -336,6 +366,7 @@
 	}
 
 	.elodin-recently-edited-column-header span {
+		font-size: 11px;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -383,7 +414,7 @@
 		display: flex !important;
 		flex-wrap: wrap !important;
 		gap: 4px !important;
-		padding: 8px !important;
+		padding: 8px 100px 8px 8px !important;
 		margin: 0 !important;
 		background: rgba(0, 0, 0, 0.18) !important;
 		border-top: 1px solid rgba(255, 255, 255, 0.08) !important;

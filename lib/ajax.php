@@ -109,6 +109,60 @@ function elodin_recently_edited_update_status() {
 }
 
 /**
+ * Update post title via AJAX.
+ *
+ * @since 1.3.0
+ */
+function elodin_recently_edited_update_title() {
+	// Verify nonce for security
+	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'elodin_recently_edited_title' ) ) {
+		wp_send_json_error( array( 'message' => 'Invalid nonce.' ), 403 );
+	}
+
+	// Sanitize and validate inputs
+	$post_id = isset( $_POST['post_id'] ) ? intval( $_POST['post_id'] ) : 0;
+	$title   = isset( $_POST['title'] ) ? sanitize_text_field( wp_unslash( $_POST['title'] ) ) : '';
+
+	if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {
+		wp_send_json_error( array( 'message' => 'Invalid post.' ), 403 );
+	}
+
+	$result = wp_update_post(
+		array(
+			'ID'         => $post_id,
+			'post_title' => $title,
+		),
+		true
+	);
+
+	if ( is_wp_error( $result ) ) {
+		wp_send_json_error( array( 'message' => 'Failed to update title.' ), 500 );
+	}
+
+	$post = get_post( $post_id );
+	if ( ! $post ) {
+		wp_send_json_error( array( 'message' => 'Post not found.' ), 404 );
+	}
+
+	$search_text = wp_strip_all_tags( $post->post_title );
+	if ( '' === trim( $search_text ) ) {
+		$search_text = __( '(no title)', 'elodin-recently-edited' );
+	}
+
+	$display_title = function_exists( 'elodin_recently_edited_get_display_title' )
+		? elodin_recently_edited_get_display_title( $post )
+		: $post->post_title;
+
+	wp_send_json_success(
+		array(
+			'title'        => $post->post_title,
+			'displayTitle' => $display_title,
+			'searchText'   => trim( $search_text ) . ' ' . $post->ID,
+		)
+	);
+}
+
+/**
  * Update post type via AJAX.
  *
  * @since 0.1

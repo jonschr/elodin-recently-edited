@@ -185,6 +185,84 @@ jQuery(function ($) {
 		$submenu.scrollTop(value);
 	}
 
+	function getMatchingTitleLinks(postId) {
+		return $(
+			'#wp-admin-bar-recently-edited .elodin-recently-edited-title-link',
+		).filter(function () {
+			return String($(this).data('postId')) === String(postId);
+		});
+	}
+
+	function closeTitleEditor($input, savedTitle) {
+		var $title = $input.closest('.elodin-recently-edited-title');
+		var $link = $title.find('.elodin-recently-edited-title-link').first();
+
+		if (typeof savedTitle === 'string') {
+			$link.data('fullTitle', savedTitle).attr('data-full-title', savedTitle);
+		}
+
+		$title.removeClass('is-editing');
+		$link.show();
+		$input.remove();
+	}
+
+	function updateTitleRows(postId, title, displayTitle, searchText) {
+		var $links = getMatchingTitleLinks(postId);
+		$links.each(function () {
+			var $link = $(this);
+			$link.text(displayTitle).data('fullTitle', title).attr('data-full-title', title);
+			$link.closest('.elodin-recently-edited-row').attr('data-search-text', searchText);
+		});
+	}
+
+	function saveTitleInput($input) {
+		if ($input.data('saving')) {
+			return;
+		}
+
+		var postId = $input.data('postId');
+		var title = $input.val();
+		var original = $input.data('originalTitle');
+		if (!postId) {
+			closeTitleEditor($input);
+			return;
+		}
+
+		if (title === original) {
+			closeTitleEditor($input);
+			return;
+		}
+
+		$input.data('saving', true).prop('disabled', true);
+		$.post(ElodinRecentlyEdited.ajaxUrl, {
+			action: 'elodin_recently_edited_update_title',
+			post_id: postId,
+			title: title,
+			nonce: ElodinRecentlyEdited.nonceTitle,
+		})
+			.done(function (response) {
+				if (response.success) {
+					updateTitleRows(
+						postId,
+						response.data.title,
+						response.data.displayTitle,
+						response.data.searchText,
+					);
+					closeTitleEditor($input, response.data.title);
+				} else {
+					$input.prop('disabled', false).data('saving', false).focus();
+					alert(
+						'Error updating title: ' +
+							(response.data ? response.data.message : 'Unknown error'),
+					);
+				}
+			})
+			.fail(function () {
+				$input.prop('disabled', false).data('saving', false).focus();
+				alert('Failed to update title.');
+			});
+	}
+
 	function scheduleClose(menuId) {
 		if (!menuId) {
 			return;
@@ -195,6 +273,10 @@ jQuery(function ($) {
 			$('#' + menuId).addClass('hover elodin-recently-edited-grace-open');
 		}, 0);
 		closeTimers[menuId] = window.setTimeout(function () {
+			if ($('#' + menuId).find(':focus').length) {
+				scheduleClose(menuId);
+				return;
+			}
 			clearKeepOpenState(menuId);
 		}, closeDelayMs);
 	}
@@ -266,37 +348,20 @@ jQuery(function ($) {
 	});
 
 	/**
-	 * Switch content type lists on hover without navigating.
-	 */
-	$(document).on(
-		'mouseenter focus',
-		'#wp-admin-bar-recently-edited .elodin-related-pill',
-		function () {
-			var $pill = $(this);
-			switchRelatedGroup(
-				$('#wp-admin-bar-recently-edited'),
-				$pill.data('relatedTarget'),
-			);
-		},
-	);
-
-	/**
-	 * Keep the menu open after selecting a content type admin link.
+	 * Switch content type lists on click without navigating.
 	 */
 	$(document).on(
 		'click',
 		'#wp-admin-bar-recently-edited .elodin-related-pill',
 		function (e) {
-			var href = $(this).attr('href');
-			var menuId = 'wp-admin-bar-recently-edited';
-			saveActiveGroup(menuId);
-			sessionStorage.setItem(storageKey(menuId), 'true');
-			saveScrollPosition(menuId);
+			e.preventDefault();
+			e.stopPropagation();
 
-			if (!href || href === '#') {
-				e.preventDefault();
-				e.stopPropagation();
-			}
+			var $pill = $(this);
+			var menuId = 'wp-admin-bar-recently-edited';
+			switchRelatedGroup($('#' + menuId), $pill.data('relatedTarget'));
+			saveActiveGroup(menuId);
+			saveScrollPosition(menuId);
 		},
 	);
 
@@ -482,11 +547,17 @@ jQuery(function ($) {
 				$(e.target).is(
 					'select.elodin-recently-edited-post-type-select',
 				) ||
+				$(e.target).is(
+					'.elodin-recently-edited-title-input',
+				) ||
 				$(e.target).closest(
 					'select.elodin-recently-edited-status-select',
 				).length ||
 				$(e.target).closest(
 					'select.elodin-recently-edited-post-type-select',
+				).length ||
+				$(e.target).closest(
+					'.elodin-recently-edited-title-input',
 				).length
 			) {
 				e.preventDefault();
@@ -496,16 +567,107 @@ jQuery(function ($) {
 	);
 
 	/**
-	 * Prevent select clicks from bubbling up
+	 * Prevent form control clicks from bubbling up.
 	 */
 	$(document).on(
 		'click',
-		'.elodin-recently-edited-status-select, .elodin-recently-edited-post-type-select',
+		'.elodin-recently-edited-status-select, .elodin-recently-edited-post-type-select, .elodin-recently-edited-title-input',
 		function (e) {
+			if ($(this).is('.elodin-recently-edited-title-input')) {
+				e.stopPropagation();
+				return;
+			}
+
 			e.preventDefault();
 			e.stopPropagation();
 		},
 	);
+
+	/**
+	 * Open an inline title editor when clicking unused title-cell space.
+	 */
+	$(document).on(
+		'click',
+		'.elodin-recently-edited-title',
+		function (e) {
+			if (
+				$(e.target).closest(
+					'.elodin-recently-edited-title-link, .elodin-recently-edited-title-input',
+				).length
+			) {
+				return;
+			}
+
+			e.preventDefault();
+			e.stopPropagation();
+			var $title = $(this);
+			var $link = $title.find('.elodin-recently-edited-title-link').first();
+			var originalTitle = $link.attr('data-full-title') || '';
+			var postId = $link.data('postId');
+
+			$title.find('.elodin-recently-edited-title-input').remove();
+			$title.addClass('is-editing');
+			$link.hide();
+
+			var $input = $('<input>', {
+				class: 'elodin-recently-edited-title-input',
+				type: 'text',
+				value: originalTitle,
+			})
+				.data('postId', postId)
+				.data('originalTitle', originalTitle);
+
+			$input.on('keydown', function (event) {
+				if (event.key !== 'Enter' && event.key !== 'Escape') {
+					return;
+				}
+
+				event.preventDefault();
+				event.stopPropagation();
+				event.stopImmediatePropagation();
+
+				if (event.key === 'Enter') {
+					saveTitleInput($input);
+					return;
+				}
+
+				$input.data('cancelTitleEdit', true);
+				closeTitleEditor($input);
+			});
+
+			$title.append($input);
+			$input.focus().select();
+		},
+	);
+
+	$(document).on(
+		'keydown',
+		'.elodin-recently-edited-title-input',
+		function (e) {
+			var $input = $(this);
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				e.stopPropagation();
+				e.stopImmediatePropagation();
+				saveTitleInput($input);
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				e.stopPropagation();
+				e.stopImmediatePropagation();
+				$input.data('cancelTitleEdit', true);
+				closeTitleEditor($input);
+			}
+		},
+	);
+
+	$(document).on('blur', '.elodin-recently-edited-title-input', function () {
+		var $input = $(this);
+		if ($input.data('cancelTitleEdit') || $input.data('saving')) {
+			return;
+		}
+		saveTitleInput($input);
+	});
 
 	/**
 	 * Copy post ID on click and show feedback

@@ -323,6 +323,27 @@ function elodin_recently_edited_get_switchable_post_types() {
 }
 
 /**
+ * Get the title text displayed in menu rows.
+ *
+ * @since 1.3.0
+ *
+ * @param WP_Post $post Post object.
+ * @return string Display title.
+ */
+function elodin_recently_edited_get_display_title( $post ) {
+	if ( ! is_a( $post, 'WP_Post' ) || '' === trim( $post->post_title ) ) {
+		return __( '(no title)', 'elodin-recently-edited' );
+	}
+
+	$title = $post->post_title;
+	if ( strlen( $title ) > 40 ) {
+		$title = substr( $title, 0, 40 ) . '...';
+	}
+
+	return $title;
+}
+
+/**
  * Build the row HTML for a post menu item.
  *
  * @since 1.3.0
@@ -355,13 +376,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	}
 	$search_text = trim( $search_text ) . ' ' . $post->ID;
 
-	$title = $post->post_title;
-	if ( empty( $title ) ) {
-		$title = esc_html__( '(no title)', 'elodin-recently-edited' );
-	} elseif ( strlen( $title ) > 40 ) {
-		$title = substr( $title, 0, 40 ) . '...';
-	}
-	$title = esc_html( $title );
+	$title = esc_html( elodin_recently_edited_get_display_title( $post ) );
 
 	$is_pinned = in_array( $post->ID, $pinned_ids, true );
 	$pin_class = $is_pinned ? 'elodin-recently-edited-pin is-pinned' : 'elodin-recently-edited-pin';
@@ -441,7 +456,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	return '<span class="' . esc_attr( $row_class ) . '" data-related-group="' . esc_attr( $group ) . '" data-post-type="' . esc_attr( $post->post_type ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
 		. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="' . esc_attr__( 'Pin', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
 		. '<span class="elodin-recently-edited-title">'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '">' . $title . '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '">' . $title . '</span>'
 		. '</span>'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
 		. '<select class="elodin-recently-edited-status-select" name="elodin_recently_edited_status_' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
