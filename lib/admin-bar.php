@@ -19,6 +19,128 @@ function elodin_recently_edited_get_view_link( $post ) {
 }
 
 /**
+ * Determine whether a post has been built with Elementor.
+ *
+ * @since 1.3.0
+ *
+ * @param WP_Post|null $post Post object.
+ * @return bool Whether the post uses Elementor.
+ */
+function elodin_recently_edited_is_elementor_post( $post ) {
+	if ( ! $post || ! is_a( $post, 'WP_Post' ) ) {
+		return false;
+	}
+
+	$is_elementor = 'builder' === get_post_meta( $post->ID, '_elementor_edit_mode', true );
+
+	/**
+	 * Filter whether a post should use the Elementor editor link.
+	 *
+	 * @since 1.3.0
+	 *
+	 * @param bool    $is_elementor Whether the post uses Elementor.
+	 * @param WP_Post $post         Post object.
+	 */
+	return (bool) apply_filters( 'elodin_recently_edited_is_elementor_post', $is_elementor, $post );
+}
+
+/**
+ * Get the Elementor editor URL for a post.
+ *
+ * @since 1.3.0
+ *
+ * @param WP_Post|null $post Post object.
+ * @return string Elementor editor URL, or an empty string when unavailable.
+ */
+function elodin_recently_edited_get_elementor_edit_link( $post ) {
+	if ( ! elodin_recently_edited_is_elementor_post( $post ) ) {
+		return '';
+	}
+
+	if (
+		class_exists( '\Elementor\Plugin' )
+		&& isset( \Elementor\Plugin::$instance->documents )
+		&& method_exists( \Elementor\Plugin::$instance->documents, 'get' )
+	) {
+		$document = \Elementor\Plugin::$instance->documents->get( $post->ID );
+		if ( $document && method_exists( $document, 'get_edit_url' ) ) {
+			$edit_url = $document->get_edit_url();
+			if ( $edit_url ) {
+				return $edit_url;
+			}
+		}
+	}
+
+	return add_query_arg(
+		array(
+			'post'   => $post->ID,
+			'action' => 'elementor',
+		),
+		admin_url( 'post.php' )
+	);
+}
+
+/**
+ * Get the most appropriate edit link for a post.
+ *
+ * Uses Elementor when the post was built with Elementor, otherwise falls back to WordPress.
+ *
+ * @since 1.3.0
+ *
+ * @param WP_Post|null $post Post object.
+ * @return string Edit URL, or an empty string when unavailable.
+ */
+function elodin_recently_edited_get_edit_link( $post ) {
+	if ( ! $post || ! is_a( $post, 'WP_Post' ) ) {
+		return '';
+	}
+
+	$elementor_edit_url = elodin_recently_edited_get_elementor_edit_link( $post );
+	if ( $elementor_edit_url ) {
+		return $elementor_edit_url;
+	}
+
+	return get_edit_post_link( $post->ID );
+}
+
+/**
+ * Get the title link for a post row.
+ *
+ * Draft-like posts use the editor; published public content uses the view link.
+ *
+ * @since 1.3.0
+ *
+ * @param WP_Post|null $post Post object.
+ * @param string       $edit_url Optional edit URL.
+ * @return string Title URL, or an empty string when unavailable.
+ */
+function elodin_recently_edited_get_post_title_link( $post, $edit_url = '' ) {
+	if ( ! $post || ! is_a( $post, 'WP_Post' ) ) {
+		return '';
+	}
+
+	if ( '' === $edit_url ) {
+		$edit_url = elodin_recently_edited_get_edit_link( $post );
+	}
+
+	$post_type_obj = get_post_type_object( $post->post_type );
+
+	$has_singular_template = false;
+	if ( $post_type_obj ) {
+		$standard_public_types = array( 'post', 'page' );
+		if ( in_array( $post->post_type, $standard_public_types, true ) ) {
+			$has_singular_template = true;
+		} elseif ( isset( $post_type_obj->publicly_queryable ) && $post_type_obj->publicly_queryable ) {
+			$has_singular_template = true;
+		}
+	}
+
+	$is_draft_or_pending = in_array( $post->post_status, array( 'draft', 'pending' ), true );
+
+	return ( $has_singular_template && ! $is_draft_or_pending ) ? elodin_recently_edited_get_view_link( $post ) : $edit_url;
+}
+
+/**
  * Get normalized slug for a wp_template post.
  *
  * Template post names can include a theme namespace (for example "theme//single-page").
@@ -389,15 +511,24 @@ function elodin_recently_edited_get_gravity_forms_items() {
 		$date_updated = isset( $form['date_updated'] ) ? (string) $form['date_updated'] : '';
 
 		$items[] = array(
-			'id'           => $id,
-			'title'        => '' === trim( $title ) ? __( '(no title)', 'elodin-recently-edited' ) : $title,
-			'is_active'    => ! empty( $form['is_active'] ),
-			'status'       => ! empty( $form['is_active'] ) ? __( 'Active', 'elodin-recently-edited' ) : __( 'Inactive', 'elodin-recently-edited' ),
-			'date_created' => $date_created,
-			'date_updated' => $date_updated,
-			'view_url'     => trailingslashit( site_url() ) . '?gf_page=preview&id=' . $id,
-			'edit_url'     => admin_url( 'admin.php?page=gf_edit_forms&id=' . $id ),
-			'modified_ts'  => $date_updated ? strtotime( $date_updated ) : strtotime( $date_created ),
+			'id'                => $id,
+			'title'             => '' === trim( $title ) ? __( '(no title)', 'elodin-recently-edited' ) : $title,
+			'is_active'         => ! empty( $form['is_active'] ),
+			'status'            => ! empty( $form['is_active'] ) ? __( 'Active', 'elodin-recently-edited' ) : __( 'Inactive', 'elodin-recently-edited' ),
+			'date_created'      => $date_created,
+			'date_updated'      => $date_updated,
+			'view_url'          => trailingslashit( site_url() ) . '?gf_page=preview&id=' . $id,
+			'edit_url'          => admin_url( 'admin.php?page=gf_edit_forms&id=' . $id ),
+			'notifications_url' => add_query_arg(
+				array(
+					'page'    => 'gf_edit_forms',
+					'view'    => 'settings',
+					'subview' => 'notification',
+					'id'      => $id,
+				),
+				admin_url( 'admin.php' )
+			),
+			'modified_ts'       => $date_updated ? strtotime( $date_updated ) : strtotime( $date_created ),
 		);
 	}
 
@@ -443,6 +574,48 @@ function elodin_recently_edited_get_display_title( $post ) {
 }
 
 /**
+ * Get the slug text displayed in menu rows.
+ *
+ * @since 1.3.0
+ *
+ * @param WP_Post $post Post object.
+ * @return string Display slug.
+ */
+function elodin_recently_edited_get_display_slug( $post ) {
+	if ( ! is_a( $post, 'WP_Post' ) || '' === trim( $post->post_name ) ) {
+		return __( '(no slug)', 'elodin-recently-edited' );
+	}
+
+	$slug = $post->post_name;
+	if ( strlen( $slug ) > 34 ) {
+		$slug = substr( $slug, 0, 34 ) . '...';
+	}
+
+	return $slug;
+}
+
+/**
+ * Get searchable row text for a post.
+ *
+ * @since 1.3.0
+ *
+ * @param WP_Post $post Post object.
+ * @return string Search text.
+ */
+function elodin_recently_edited_get_post_search_text( $post ) {
+	if ( ! is_a( $post, 'WP_Post' ) ) {
+		return '';
+	}
+
+	$title = wp_strip_all_tags( $post->post_title );
+	if ( '' === trim( $title ) ) {
+		$title = __( '(no title)', 'elodin-recently-edited' );
+	}
+
+	return trim( $title . ' ' . $post->post_name . ' ' . $post->ID );
+}
+
+/**
  * Build the row HTML for a post menu item.
  *
  * @since 1.3.0
@@ -462,20 +635,15 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 		return '';
 	}
 
-	$edit_url = get_edit_post_link( $post->ID );
+	$edit_url = elodin_recently_edited_get_edit_link( $post );
 	if ( ! $edit_url ) {
 		return '';
 	}
 
-	$view_url = elodin_recently_edited_get_view_link( $post );
-
-	$search_text = wp_strip_all_tags( $post->post_title );
-	if ( '' === trim( $search_text ) ) {
-		$search_text = __( '(no title)', 'elodin-recently-edited' );
-	}
-	$search_text = trim( $search_text ) . ' ' . $post->ID;
+	$search_text = elodin_recently_edited_get_post_search_text( $post );
 
 	$title = esc_html( elodin_recently_edited_get_display_title( $post ) );
+	$slug  = esc_html( elodin_recently_edited_get_display_slug( $post ) );
 
 	$is_pinned = in_array( $post->ID, $pinned_ids, true );
 	$pin_class = $is_pinned ? 'elodin-recently-edited-pin is-pinned' : 'elodin-recently-edited-pin';
@@ -502,20 +670,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 		$post_type_options .= '<option value="' . esc_attr( $pt_slug ) . '"' . $selected . '>' . esc_html( $pt_obj->labels->singular_name ) . '</option>';
 	}
 
-	$post_type_obj = get_post_type_object( $post->post_type );
-
-	$has_singular_template = false;
-	if ( $post_type_obj ) {
-		$standard_public_types = array( 'post', 'page' );
-		if ( in_array( $post->post_type, $standard_public_types, true ) ) {
-			$has_singular_template = true;
-		} elseif ( isset( $post_type_obj->publicly_queryable ) && $post_type_obj->publicly_queryable ) {
-			$has_singular_template = true;
-		}
-	}
-
-	$is_draft_or_pending = in_array( $post->post_status, array( 'draft', 'pending' ), true );
-	$title_url           = ( $has_singular_template && ! $is_draft_or_pending ) ? $view_url : $edit_url;
+	$title_url = elodin_recently_edited_get_post_title_link( $post, $edit_url );
 
 	$date_format   = 'n/j/y';
 	$published_raw = get_post_time( 'U', false, $post );
@@ -546,6 +701,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	if ( $editor_name ) {
 		$modified_title .= ': ' . $editor_name;
 	}
+	$copy_url = get_permalink( $post->ID );
 
 	$row_class = $post->post_status === 'publish' ? 'elodin-recently-edited-row' : 'elodin-recently-edited-row elodin-recently-edited-row--not-published';
 	if ( intval( $post->ID ) === intval( $current_post_id ) ) {
@@ -556,6 +712,9 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 		. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="' . esc_attr__( 'Pin', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
 		. '<span class="elodin-recently-edited-title">'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '" data-resource-type="post" data-resource-id="' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '">' . $title . '</span>'
+		. '</span>'
+		. '<span class="elodin-recently-edited-slug">'
+		. '<span class="elodin-recently-edited-slug-text" data-post-id="' . intval( $post->ID ) . '" data-full-slug="' . esc_attr( $post->post_name ) . '" data-copy-text="' . esc_url( $copy_url ) . '">' . $slug . '</span>'
 		. '</span>'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
 		. '<select class="elodin-recently-edited-status-select" name="elodin_recently_edited_status_' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
@@ -615,6 +774,9 @@ function elodin_recently_edited_get_gravity_form_row( $form_item, $group = 'grav
 		. '<span></span>'
 		. '<span class="' . esc_attr( $title_class ) . '">'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $form_item['view_url'] ) . '" data-new-tab="true" data-resource-type="gravity_form" data-resource-id="' . intval( $id ) . '" data-full-title="' . esc_attr( $full_title ) . '">' . $title . '</span>'
+		. '</span>'
+		. '<span class="elodin-recently-edited-slug elodin-recently-edited-slug--locked">'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-form-notifications" data-url="' . esc_url( $form_item['notifications_url'] ) . '">' . esc_html__( 'Notifications', 'elodin-recently-edited' ) . '</span>'
 		. '</span>'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $form_item['edit_url'] ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
 		. $status_html
@@ -1041,6 +1203,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			'title'  => '<div class="elodin-recently-edited-column-header" aria-hidden="true">'
 				. '<span></span>'
 				. '<span>' . esc_html__( 'Title', 'elodin-recently-edited' ) . '</span>'
+				. '<span>' . esc_html__( 'Slug', 'elodin-recently-edited' ) . '</span>'
 				. '<span></span>'
 				. '<span>' . esc_html__( 'Status', 'elodin-recently-edited' ) . '</span>'
 				. '<span>' . esc_html__( 'Type', 'elodin-recently-edited' ) . '</span>'

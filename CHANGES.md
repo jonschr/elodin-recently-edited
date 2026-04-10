@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.3.0 - 2026-04-10
+## 1.3.1 - 2026-04-10
 - Combined the former Recently Edited and Related admin-bar dropdowns into a single starred Recently Edited menu.
 - Added content-type pills inside the menu, including an All view and per-type lists that switch on click.
 - Defaulted the active content-type view to the current screen's post type, while search switches back to All to maximize matches.
@@ -10,9 +10,11 @@
 - Aligned content-type pills with the same post types available in the post type switcher.
 - Improved menu close timing so accidental pointer movement away from the dropdown is less disruptive.
 - Added inline title editing from the title column while keeping direct title text as the view/preview link.
+- Added a wider dropdown layout with an editable slug column after the title; direct slug clicks copy the full URL.
 - Added Escape handling so cancelling an inline title edit does not close the full dropdown.
 - Added Gravity Forms as a supported content type when Gravity Forms is active.
-- Added Gravity Forms preview links that open in a new tab, edit links to the form editor, inline form title editing, Active/Inactive status editing, and shortcode copying from the form ID.
+- Added Gravity Forms preview links that open in a new tab, edit links to the form editor, notification settings links, inline form title editing, Active/Inactive status editing, and shortcode copying from the form ID.
+- Routed Edit links for Elementor-built posts to the Elementor editor instead of the regular WordPress editor.
 - Normalized front-end and admin menu queries so public editable content types, including Modern Tribe Events, appear consistently across contexts.
 
 ## 1.2.2 - 2026-02-26

@@ -221,6 +221,130 @@ jQuery(function ($) {
 		});
 	}
 
+	function getMatchingSlugTexts(postId) {
+		return $(
+			'#wp-admin-bar-recently-edited .elodin-recently-edited-slug-text',
+		).filter(function () {
+			return String($(this).data('postId')) === String(postId);
+		});
+	}
+
+	function closeSlugEditor($input, savedSlug) {
+		var $slug = $input.closest('.elodin-recently-edited-slug');
+		var $text = $slug.find('.elodin-recently-edited-slug-text').first();
+
+		if (typeof savedSlug === 'string') {
+			$text.data('fullSlug', savedSlug).attr('data-full-slug', savedSlug);
+		}
+
+		$slug.removeClass('is-editing');
+		$text.show();
+		$input.remove();
+	}
+
+	function copyTextWithFeedback($element, copyText, feedbackText) {
+		var originalText = $element.text();
+
+		function showCopied() {
+			$element.text(feedbackText || 'Copied');
+			window.setTimeout(function () {
+				$element.text(originalText);
+			}, 900);
+		}
+
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			navigator.clipboard
+				.writeText(copyText)
+				.then(showCopied)
+				.catch(function () {
+					showCopied();
+				});
+		} else {
+			var tempInput = $('<input>')
+				.val(copyText)
+				.appendTo('body')
+				.select();
+			try {
+				document.execCommand('copy');
+			} catch (err) {
+				// no-op fallback
+			}
+			tempInput.remove();
+			showCopied();
+		}
+	}
+
+	function updateSlugRows(postId, slug, displaySlug, searchText, titleUrl, copyUrl) {
+		var $texts = getMatchingSlugTexts(postId);
+		$texts.each(function () {
+			var $text = $(this);
+			var $row = $text.closest('.elodin-recently-edited-row');
+			$text.text(displaySlug).data('fullSlug', slug).attr('data-full-slug', slug);
+			if (copyUrl) {
+				$text.attr('data-copy-text', copyUrl);
+			}
+			$row.attr('data-search-text', searchText);
+			if (titleUrl) {
+				$row
+					.find(
+						'.elodin-recently-edited-title-link[data-resource-type="post"]',
+					)
+					.data('url', titleUrl)
+					.attr('data-url', titleUrl);
+			}
+		});
+	}
+
+	function saveSlugInput($input) {
+		if ($input.data('saving')) {
+			return;
+		}
+
+		var postId = $input.data('postId');
+		var slug = $input.val();
+		var original = $input.data('originalSlug');
+		if (!postId) {
+			closeSlugEditor($input);
+			return;
+		}
+
+		if (slug === original) {
+			closeSlugEditor($input);
+			return;
+		}
+
+		$input.data('saving', true).prop('disabled', true);
+		$.post(ElodinRecentlyEdited.ajaxUrl, {
+			action: 'elodin_recently_edited_update_slug',
+			post_id: postId,
+			slug: slug,
+			nonce: ElodinRecentlyEdited.nonceSlug,
+		})
+			.done(function (response) {
+				if (response.success) {
+					updateSlugRows(
+						postId,
+						response.data.slug,
+						response.data.displaySlug,
+						response.data.searchText,
+						response.data.titleUrl,
+						response.data.copyUrl,
+					);
+					closeSlugEditor($input, response.data.slug);
+				} else {
+					$input.prop('disabled', false).data('saving', false).focus();
+					alert(
+						'Error updating slug: ' +
+							(response.data ? response.data.message : 'Unknown error'),
+					);
+				}
+			})
+			.fail(function () {
+				$input.prop('disabled', false).data('saving', false).focus();
+				alert('Failed to update slug.');
+			});
+	}
+
 	function saveTitleInput($input) {
 		if ($input.data('saving')) {
 			return;
@@ -561,7 +685,7 @@ jQuery(function ($) {
 					'select.elodin-recently-edited-post-type-select',
 				) ||
 				$(e.target).is(
-					'.elodin-recently-edited-title-input',
+					'.elodin-recently-edited-title-input, .elodin-recently-edited-slug-input',
 				) ||
 				$(e.target).closest(
 					'select.elodin-recently-edited-status-select',
@@ -574,6 +698,9 @@ jQuery(function ($) {
 				).length ||
 				$(e.target).closest(
 					'.elodin-recently-edited-title-input',
+				).length ||
+				$(e.target).closest(
+					'.elodin-recently-edited-slug-input',
 				).length
 			) {
 				e.preventDefault();
@@ -587,9 +714,9 @@ jQuery(function ($) {
 	 */
 	$(document).on(
 		'click',
-		'.elodin-recently-edited-status-select, .elodin-recently-edited-form-status-select, .elodin-recently-edited-post-type-select, .elodin-recently-edited-title-input',
+		'.elodin-recently-edited-status-select, .elodin-recently-edited-form-status-select, .elodin-recently-edited-post-type-select, .elodin-recently-edited-title-input, .elodin-recently-edited-slug-input',
 		function (e) {
-			if ($(this).is('.elodin-recently-edited-title-input')) {
+			if ($(this).is('.elodin-recently-edited-title-input, .elodin-recently-edited-slug-input')) {
 				e.stopPropagation();
 				return;
 			}
@@ -693,6 +820,94 @@ jQuery(function ($) {
 	});
 
 	/**
+	 * Open an inline slug editor when clicking the slug cell.
+	 */
+	$(document).on(
+		'click',
+		'.elodin-recently-edited-slug',
+		function (e) {
+			if (
+				$(e.target).closest(
+					'.elodin-recently-edited-slug-text, .elodin-recently-edited-slug-input',
+				).length
+			) {
+				return;
+			}
+
+			e.preventDefault();
+			e.stopPropagation();
+			var $slug = $(this);
+			if ($slug.hasClass('elodin-recently-edited-slug--locked')) {
+				return;
+			}
+
+			var $text = $slug.find('.elodin-recently-edited-slug-text').first();
+			var originalSlug = $text.attr('data-full-slug') || '';
+			var postId = $text.data('postId');
+
+			$slug.find('.elodin-recently-edited-slug-input').remove();
+			$slug.addClass('is-editing');
+			$text.hide();
+
+			var $input = $('<input>', {
+				class: 'elodin-recently-edited-slug-input',
+				type: 'text',
+				value: originalSlug,
+			})
+				.data('postId', postId)
+				.data('originalSlug', originalSlug);
+
+			$slug.append($input);
+			$input.focus().select();
+		},
+	);
+
+	$(document).on(
+		'keydown',
+		'.elodin-recently-edited-slug-input',
+		function (e) {
+			var $input = $(this);
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				e.stopPropagation();
+				e.stopImmediatePropagation();
+				saveSlugInput($input);
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				e.stopPropagation();
+				e.stopImmediatePropagation();
+				$input.data('cancelSlugEdit', true);
+				closeSlugEditor($input);
+			}
+		},
+	);
+
+	$(document).on('blur', '.elodin-recently-edited-slug-input', function () {
+		var $input = $(this);
+		if ($input.data('cancelSlugEdit') || $input.data('saving')) {
+			return;
+		}
+		saveSlugInput($input);
+	});
+
+	/**
+	 * Copy the full URL when clicking directly on slug text.
+	 */
+	$(document).on('click', '.elodin-recently-edited-slug-text', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		var $slug = $(this);
+		var copyText = $slug.attr('data-copy-text');
+		if (!copyText) {
+			return;
+		}
+
+		copyTextWithFeedback($slug, copyText, 'Copied');
+	});
+
+	/**
 	 * Copy post ID or row-specific copy text on click and show feedback
 	 */
 	$(document).on('click', '.elodin-recently-edited-id', function (e) {
@@ -704,37 +919,10 @@ jQuery(function ($) {
 			return;
 		}
 
-		var originalText = $id.text();
 		var copyText = $id.attr('data-copy-text') || String(postId);
 		var feedbackText = $id.attr('data-copy-feedback') || 'Copied';
 
-		function showCopied() {
-			$id.text(feedbackText);
-			window.setTimeout(function () {
-				$id.text(originalText);
-			}, 900);
-		}
-
-		if (navigator.clipboard && navigator.clipboard.writeText) {
-			navigator.clipboard
-				.writeText(copyText)
-				.then(showCopied)
-				.catch(function () {
-					showCopied();
-				});
-		} else {
-			var tempInput = $('<input>')
-				.val(copyText)
-				.appendTo('body')
-				.select();
-			try {
-				document.execCommand('copy');
-			} catch (err) {
-				// no-op fallback
-			}
-			tempInput.remove();
-			showCopied();
-		}
+		copyTextWithFeedback($id, copyText, feedbackText);
 	});
 
 	/**

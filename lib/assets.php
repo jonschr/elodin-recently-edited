@@ -28,6 +28,7 @@ function elodin_recently_edited_enqueue_assets() {
 	$nonce_status    = wp_create_nonce( 'elodin_recently_edited_status' );
 	$nonce_post_type = wp_create_nonce( 'elodin_recently_edited_post_type' );
 	$nonce_title     = wp_create_nonce( 'elodin_recently_edited_title' );
+	$nonce_slug      = wp_create_nonce( 'elodin_recently_edited_slug' );
 
 	// Localize script with AJAX URL and nonces
 	wp_localize_script(
@@ -39,6 +40,7 @@ function elodin_recently_edited_enqueue_assets() {
 			'nonceStatus'   => $nonce_status,
 			'noncePostType' => $nonce_post_type,
 			'nonceTitle'    => $nonce_title,
+			'nonceSlug'     => $nonce_slug,
 		)
 	);
 

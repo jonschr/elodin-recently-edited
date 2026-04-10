@@ -1,8 +1,8 @@
 #wp-admin-bar-recently-edited {
-	--elodin-recently-edited-columns: 18px minmax(220px, 270px) 34px 58px 72px 46px 46px 42px;
+	--elodin-recently-edited-columns: 18px minmax(220px, 280px) minmax(140px, 180px) 34px 58px 72px 46px 46px 42px;
 
 	.ab-submenu {
-		min-width: 660px;
+		min-width: 860px;
 		width: auto !important;
 		height: auto !important;
 		max-height: none !important;
@@ -106,6 +106,44 @@
 		flex: 0 0 10px;
 	}
 
+	.elodin-recently-edited-slug {
+		grid-column: 3 / 4;
+		display: flex;
+		align-items: center;
+		min-width: 0;
+		width: 100%;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		cursor: text;
+	}
+
+	.elodin-recently-edited-slug::after {
+		content: "";
+		align-self: stretch;
+		flex: 0 0 10px;
+	}
+
+	.elodin-recently-edited-slug-text {
+		color: rgba(255, 255, 255, 0.58);
+		display: block;
+		flex: 0 1 auto;
+		min-width: 0;
+		width: auto;
+		max-width: calc(100% - 10px);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		cursor: copy;
+		font-size: 11px;
+		line-height: 1;
+	}
+
+	.elodin-recently-edited-slug-text:hover {
+		color: rgba(255, 255, 255, 0.82);
+		text-decoration: underline;
+	}
+
 	.elodin-recently-edited-id {
 		justify-self: end;
 		color: rgba(255, 255, 255, 0.75);
@@ -146,7 +184,8 @@
 		text-decoration: underline;
 	}
 
-	.elodin-recently-edited-title-input {
+	.elodin-recently-edited-title-input,
+	.elodin-recently-edited-slug-input {
 		flex: 1 1 auto;
 		min-width: 0;
 		width: 100%;
@@ -160,7 +199,8 @@
 		padding: 2px 4px;
 	}
 
-	.elodin-recently-edited-title-input:focus {
+	.elodin-recently-edited-title-input:focus,
+	.elodin-recently-edited-slug-input:focus {
 		border-color: rgba(244, 197, 66, 0.72);
 		outline: none;
 	}
@@ -275,7 +315,7 @@
 }
 
 #wp-admin-bar-recently-edited .ab-submenu {
-	min-width: 660px !important;
+	min-width: 860px !important;
 	width: auto !important;
 	box-sizing: border-box;
 }
@@ -387,7 +427,7 @@
 		white-space: nowrap;
 	}
 
-	.elodin-recently-edited-column-header span:nth-child(n + 6) {
+	.elodin-recently-edited-column-header span:nth-child(n + 7) {
 		text-align: right;
 	}
 
