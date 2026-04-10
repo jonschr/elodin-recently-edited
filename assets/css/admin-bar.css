@@ -1,12 +1,13 @@
 #wp-admin-bar-recently-edited {
+	--elodin-recently-edited-columns: 18px minmax(220px, 270px) 34px 58px 72px 46px 46px 42px;
+
 	.ab-submenu {
 		min-width: 660px;
 		width: auto !important;
 		height: auto !important;
-		max-height: 400px !important;
-		overflow-y: auto !important;
-		overflow-x: hidden !important;
-		padding-bottom: 6px !important;
+		max-height: none !important;
+		overflow: visible !important;
+		padding-bottom: 0 !important;
 	}
 
 	.ab-submenu .ab-item {
@@ -69,7 +70,7 @@
 
 	.elodin-recently-edited-row {
 		display: grid;
-		grid-template-columns: 18px minmax(200px, 250px) 40px 64px 80px 56px 56px 52px;
+		grid-template-columns: var(--elodin-recently-edited-columns);
 		align-items: center;
 		column-gap: 4px;
 		width: 100%;
@@ -77,6 +78,14 @@
 
 	.elodin-recently-edited-row--not-published {
 		opacity: 0.6;
+	}
+
+	.elodin-recently-edited-row--current .elodin-recently-edited-title-link {
+		color: #f4c542;
+	}
+
+	.elodin-recently-edited-row--current .elodin-recently-edited-title-link:hover {
+		color: #f4c542;
 	}
 
 	.elodin-recently-edited-title {
@@ -265,6 +274,105 @@
 		min-width: 0 !important;
 		white-space: normal !important;
 		overflow: visible !important;
+	}
+
+	.elodin-recently-edited-post-list-item {
+		float: none !important;
+		clear: both !important;
+		width: 100% !important;
+		height: auto !important;
+		min-height: 0 !important;
+		line-height: normal !important;
+	}
+
+	.elodin-recently-edited-post-list-item > .ab-item {
+		padding: 0 !important;
+		height: auto !important;
+		min-height: 0 !important;
+		line-height: normal !important;
+		min-width: 0 !important;
+		white-space: normal !important;
+		overflow: visible !important;
+	}
+
+	.elodin-recently-edited-column-header-item {
+		float: none !important;
+		clear: both !important;
+		width: 100% !important;
+		height: auto !important;
+		min-height: 0 !important;
+		line-height: normal !important;
+	}
+
+	.elodin-recently-edited-column-header-item > .ab-item {
+		padding: 0 calc(8px + var(--elodin-scrollbar-width, 0px)) 0 8px !important;
+		height: auto !important;
+		min-height: 0 !important;
+		line-height: 1 !important;
+		min-width: 0 !important;
+		white-space: normal !important;
+		cursor: default !important;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.18) !important;
+		position: relative;
+		z-index: 1;
+	}
+
+	.elodin-recently-edited-column-header {
+		display: grid;
+		grid-template-columns: var(--elodin-recently-edited-columns);
+		align-items: center;
+		column-gap: 4px;
+		width: 100%;
+		box-sizing: border-box;
+		color: rgba(255, 255, 255, 0.38);
+		font-size: 6px;
+		line-height: 1;
+		text-transform: uppercase;
+	}
+
+	.elodin-recently-edited-column-header span {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.elodin-recently-edited-column-header span:nth-child(n + 6) {
+		text-align: right;
+	}
+
+	.elodin-recently-edited-post-list {
+		max-height: 320px;
+		overflow-y: auto;
+		overflow-x: hidden;
+		padding: 0 0 6px;
+		box-sizing: border-box;
+		scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+		scrollbar-width: thin;
+	}
+
+	.elodin-recently-edited-post-list::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.elodin-recently-edited-post-list::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.elodin-recently-edited-post-list::-webkit-scrollbar-thumb {
+		background: rgba(255, 255, 255, 0.22);
+		border-radius: 8px;
+	}
+
+	.elodin-recently-edited-post-list::-webkit-scrollbar-thumb:hover {
+		background: rgba(255, 255, 255, 0.32);
+	}
+
+	.elodin-recently-edited-list-item {
+		box-sizing: border-box;
+		min-height: 26px;
+		padding: 0 8px;
 	}
 
 	.elodin-related-pill-band {

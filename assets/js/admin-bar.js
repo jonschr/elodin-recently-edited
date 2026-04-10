@@ -14,8 +14,8 @@ jQuery(function ($) {
 		return 'elodin_recently_edited_keep_menu_open';
 	}
 
-	function scrollStorageKey(menuId) {
-		return 'elodin_recently_edited_scroll_top';
+	function scrollStorageKey(menuId, group) {
+		return 'elodin_recently_edited_scroll_top_' + (group || 'all');
 	}
 
 	function groupStorageKey(menuId) {
@@ -26,6 +26,26 @@ jQuery(function ($) {
 		return (value || '').toString().toLowerCase().trim();
 	}
 
+	function setScrollbarWidthVariable() {
+		var probe = $('<div>')
+			.css({
+				height: '100px',
+				left: '-9999px',
+				overflow: 'scroll',
+				position: 'absolute',
+				top: '-9999px',
+				width: '100px',
+			})
+			.appendTo('body');
+		var scrollbarWidth = probe[0].offsetWidth - probe[0].clientWidth;
+		probe.remove();
+
+		$('#wp-admin-bar-recently-edited').css(
+			'--elodin-scrollbar-width',
+			scrollbarWidth + 'px',
+		);
+	}
+
 	function filterMenuItems($menu, query) {
 		var normalized = normalizeSearchText(query);
 		var matchCount = 0;
@@ -33,7 +53,7 @@ jQuery(function ($) {
 
 		$menu.find('.elodin-recently-edited-row').each(function () {
 			var $row = $(this);
-			var $item = $row.closest('li');
+			var $item = $row.closest('.elodin-recently-edited-list-item');
 			if ($row.attr('data-related-group') !== activeGroup) {
 				$item.hide();
 				return;
@@ -69,7 +89,10 @@ jQuery(function ($) {
 	}
 
 	function getSubmenu($menu) {
-		return $menu.find('> .ab-sub-wrapper > .ab-submenu');
+		var $postList = $menu.find('.elodin-recently-edited-post-list').first();
+		return $postList.length
+			? $postList
+			: $menu.find('> .ab-sub-wrapper > .ab-submenu');
 	}
 
 	function getActiveGroup($menu) {
@@ -84,10 +107,21 @@ jQuery(function ($) {
 			return;
 		}
 
+		var $targetPill = $menu.find(
+			'.elodin-related-pill[data-related-target="' + target + '"]',
+		);
+		if (!$targetPill.length && target !== 'all') {
+			target = 'all';
+			$targetPill = $menu.find(
+				'.elodin-related-pill[data-related-target="all"]',
+			);
+		}
+		if (!$targetPill.length) {
+			return;
+		}
+
 		$menu.find('.elodin-related-pill').removeClass('is-active');
-		$menu
-			.find('.elodin-related-pill[data-related-target="' + target + '"]')
-			.addClass('is-active');
+		$targetPill.addClass('is-active');
 
 		$menu.find('.elodin-recently-edited-list-item').removeClass('is-active');
 		$menu
@@ -96,13 +130,14 @@ jQuery(function ($) {
 					target +
 					'"]',
 			)
-			.closest('li')
+			.closest('.elodin-recently-edited-list-item')
 			.addClass('is-active');
 
 		filterMenuItems(
 			$menu,
 			$menu.find('.elodin-recently-edited-search-input').first().val(),
 		);
+		$menu.find('.elodin-recently-edited-post-list').scrollTop(0);
 	}
 
 	function saveActiveGroup(menuId) {
@@ -122,8 +157,9 @@ jQuery(function ($) {
 		if (!$submenu.length) {
 			return;
 		}
+		var group = getActiveGroup($menu);
 		sessionStorage.setItem(
-			scrollStorageKey(menuId),
+			scrollStorageKey(menuId, group),
 			String($submenu.scrollTop()),
 		);
 	}
@@ -137,7 +173,8 @@ jQuery(function ($) {
 		if (!$submenu.length) {
 			return;
 		}
-		var stored = sessionStorage.getItem(scrollStorageKey(menuId));
+		var group = getActiveGroup($menu);
+		var stored = sessionStorage.getItem(scrollStorageKey(menuId, group));
 		if (!stored) {
 			return;
 		}
@@ -309,6 +346,7 @@ jQuery(function ($) {
 			e.stopPropagation();
 			var $input = $(this);
 			var menuId = getMenuIdFromElement($input);
+			switchRelatedGroup($('#' + menuId), 'all');
 			filterMenuItems($('#' + menuId), $input.val());
 		},
 	);
@@ -319,6 +357,8 @@ jQuery(function ($) {
 		function (e) {
 			e.preventDefault();
 			e.stopPropagation();
+			var menuId = getMenuIdFromElement($(this));
+			switchRelatedGroup($('#' + menuId), 'all');
 		},
 	);
 
@@ -348,6 +388,7 @@ jQuery(function ($) {
 			return;
 		}
 
+		switchRelatedGroup($menu, 'all');
 		var nextValue = ($input.val() || '') + e.key;
 		$input.val(nextValue);
 		filterMenuItems($menu, nextValue);
@@ -358,12 +399,13 @@ jQuery(function ($) {
 	/**
 	 * Initialize menu state on page load
 	 */
+	setScrollbarWidthVariable();
 	checkAndRestoreMenuState();
 
 	/**
 	 * Persist scroll position while scrolling
 	 */
-	$('#wp-admin-bar-recently-edited .ab-submenu').on(
+	$('#wp-admin-bar-recently-edited .elodin-recently-edited-post-list').on(
 		'scroll',
 		function () {
 			var $menu = $(this).closest('#wp-admin-bar-recently-edited');
@@ -534,12 +576,19 @@ jQuery(function ($) {
 			})
 				.done(function (response) {
 					if (response.success) {
+						var $matchingStatusSelects = $(
+							'#wp-admin-bar-recently-edited .elodin-recently-edited-status-select',
+						).filter(function () {
+							return String($(this).data('postId')) === String(postId);
+						});
 						if (status === 'delete') {
 							// Remove the menu item
-							$select.closest('.ab-submenu .ab-item').remove();
+							$matchingStatusSelects
+								.closest('.elodin-recently-edited-list-item')
+								.remove();
 						} else {
 							// Update the original status
-							$select.data('original', status);
+							$matchingStatusSelects.data('original', status).val(status);
 						}
 					} else {
 						// Revert on error
@@ -583,7 +632,14 @@ jQuery(function ($) {
 				.done(function (response) {
 					if (response.success) {
 						// Update the original post type
-						$select.data('original', postType);
+						$(
+							'#wp-admin-bar-recently-edited .elodin-recently-edited-post-type-select',
+						)
+							.filter(function () {
+								return String($(this).data('postId')) === String(postId);
+							})
+							.data('original', postType)
+							.val(postType);
 					} else {
 						// Revert on error
 						$select.val(original);
