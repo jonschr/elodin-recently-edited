@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0 - 2026-04-10
+- Combined the former Recently Edited and Related admin-bar dropdowns into a single starred Recently Edited menu.
+- Added content-type pills inside the menu, including an All view and per-type lists that switch on click.
+- Defaulted the active content-type view to the current screen's post type, while search switches back to All to maximize matches.
+- Moved the scrolling region to the post list so search, content-type pills, and column headings stay visible.
+- Added compact column headings, scrollbar-aware alignment, a subtle header divider/shadow, and a slimmer custom scrollbar.
+- Highlighted the current post anywhere it appears in the menu.
+- Aligned content-type pills with the same post types available in the post type switcher.
+- Improved menu close timing so accidental pointer movement away from the dropdown is less disruptive.
+- Added inline title editing from the title column while keeping direct title text as the view/preview link.
+- Added Escape handling so cancelling an inline title edit does not close the full dropdown.
+- Added Gravity Forms as a supported content type when Gravity Forms is active.
+- Added Gravity Forms preview links that open in a new tab, edit links to the form editor, inline form title editing, Active/Inactive status editing, and shortcode copying from the form ID.
+- Normalized front-end and admin menu queries so public editable content types, including Modern Tribe Events, appear consistently across contexts.
+
 ## 1.2.2 - 2026-02-26
 - Removed the forced admin-bar behavior in editors by dropping the `show_admin_bar` override and editor fullscreen/distraction-free toggling.
 - Added an explicit admin-bar visibility guard before building Recently Edited / Related dropdown menus.

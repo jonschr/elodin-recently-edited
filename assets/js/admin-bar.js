@@ -185,11 +185,17 @@ jQuery(function ($) {
 		$submenu.scrollTop(value);
 	}
 
-	function getMatchingTitleLinks(postId) {
+	function getMatchingTitleLinks(resourceType, resourceId) {
 		return $(
 			'#wp-admin-bar-recently-edited .elodin-recently-edited-title-link',
 		).filter(function () {
-			return String($(this).data('postId')) === String(postId);
+			var $link = $(this);
+			var linkResourceType = $link.data('resourceType') || 'post';
+			var linkResourceId = $link.data('resourceId') || $link.data('postId');
+			return (
+				String(linkResourceType) === String(resourceType) &&
+				String(linkResourceId) === String(resourceId)
+			);
 		});
 	}
 
@@ -206,8 +212,8 @@ jQuery(function ($) {
 		$input.remove();
 	}
 
-	function updateTitleRows(postId, title, displayTitle, searchText) {
-		var $links = getMatchingTitleLinks(postId);
+	function updateTitleRows(resourceType, resourceId, title, displayTitle, searchText) {
+		var $links = getMatchingTitleLinks(resourceType, resourceId);
 		$links.each(function () {
 			var $link = $(this);
 			$link.text(displayTitle).data('fullTitle', title).attr('data-full-title', title);
@@ -220,10 +226,11 @@ jQuery(function ($) {
 			return;
 		}
 
-		var postId = $input.data('postId');
+		var resourceType = $input.data('resourceType') || 'post';
+		var resourceId = $input.data('resourceId') || $input.data('postId');
 		var title = $input.val();
 		var original = $input.data('originalTitle');
-		if (!postId) {
+		if (!resourceId) {
 			closeTitleEditor($input);
 			return;
 		}
@@ -236,14 +243,17 @@ jQuery(function ($) {
 		$input.data('saving', true).prop('disabled', true);
 		$.post(ElodinRecentlyEdited.ajaxUrl, {
 			action: 'elodin_recently_edited_update_title',
-			post_id: postId,
+			resource_type: resourceType,
+			resource_id: resourceId,
+			post_id: resourceType === 'post' ? resourceId : 0,
 			title: title,
 			nonce: ElodinRecentlyEdited.nonceTitle,
 		})
 			.done(function (response) {
 				if (response.success) {
 					updateTitleRows(
-						postId,
+						resourceType,
+						resourceId,
 						response.data.title,
 						response.data.displayTitle,
 						response.data.searchText,
@@ -545,6 +555,9 @@ jQuery(function ($) {
 			if (
 				$(e.target).is('select.elodin-recently-edited-status-select') ||
 				$(e.target).is(
+					'select.elodin-recently-edited-form-status-select',
+				) ||
+				$(e.target).is(
 					'select.elodin-recently-edited-post-type-select',
 				) ||
 				$(e.target).is(
@@ -552,6 +565,9 @@ jQuery(function ($) {
 				) ||
 				$(e.target).closest(
 					'select.elodin-recently-edited-status-select',
+				).length ||
+				$(e.target).closest(
+					'select.elodin-recently-edited-form-status-select',
 				).length ||
 				$(e.target).closest(
 					'select.elodin-recently-edited-post-type-select',
@@ -571,7 +587,7 @@ jQuery(function ($) {
 	 */
 	$(document).on(
 		'click',
-		'.elodin-recently-edited-status-select, .elodin-recently-edited-post-type-select, .elodin-recently-edited-title-input',
+		'.elodin-recently-edited-status-select, .elodin-recently-edited-form-status-select, .elodin-recently-edited-post-type-select, .elodin-recently-edited-title-input',
 		function (e) {
 			if ($(this).is('.elodin-recently-edited-title-input')) {
 				e.stopPropagation();
@@ -607,7 +623,8 @@ jQuery(function ($) {
 
 			var $link = $title.find('.elodin-recently-edited-title-link').first();
 			var originalTitle = $link.attr('data-full-title') || '';
-			var postId = $link.data('postId');
+			var resourceType = $link.data('resourceType') || 'post';
+			var resourceId = $link.data('resourceId') || $link.data('postId');
 
 			$title.find('.elodin-recently-edited-title-input').remove();
 			$title.addClass('is-editing');
@@ -618,7 +635,9 @@ jQuery(function ($) {
 				type: 'text',
 				value: originalTitle,
 			})
-				.data('postId', postId)
+				.data('resourceType', resourceType)
+				.data('resourceId', resourceId)
+				.data('postId', resourceType === 'post' ? resourceId : 0)
 				.data('originalTitle', originalTitle);
 
 			$input.on('keydown', function (event) {
@@ -674,7 +693,7 @@ jQuery(function ($) {
 	});
 
 	/**
-	 * Copy post ID on click and show feedback
+	 * Copy post ID or row-specific copy text on click and show feedback
 	 */
 	$(document).on('click', '.elodin-recently-edited-id', function (e) {
 		e.preventDefault();
@@ -686,10 +705,11 @@ jQuery(function ($) {
 		}
 
 		var originalText = $id.text();
-		var copyText = String(postId);
+		var copyText = $id.attr('data-copy-text') || String(postId);
+		var feedbackText = $id.attr('data-copy-feedback') || 'Copied';
 
 		function showCopied() {
-			$id.text('Copied');
+			$id.text(feedbackText);
 			window.setTimeout(function () {
 				$id.text(originalText);
 			}, 900);
@@ -774,6 +794,55 @@ jQuery(function ($) {
 				.fail(function () {
 					$select.val(original);
 					alert('Failed to update status.');
+				});
+		},
+	);
+
+	/**
+	 * Handle status change for Gravity Forms forms
+	 */
+	$(document).on(
+		'change',
+		'.elodin-recently-edited-form-status-select',
+		function (e) {
+			e.preventDefault();
+			var $select = $(this);
+			var formId = $select.data('formId');
+			var status = $select.val();
+			var original = $select.data('original');
+			if (!formId || !status) {
+				return;
+			}
+
+			$.post(ElodinRecentlyEdited.ajaxUrl, {
+				action: 'elodin_recently_edited_update_gravity_form_status',
+				form_id: formId,
+				status: status,
+				nonce: ElodinRecentlyEdited.nonceStatus,
+			})
+				.done(function (response) {
+					if (response.success) {
+						$(
+							'#wp-admin-bar-recently-edited .elodin-recently-edited-form-status-select',
+						)
+							.filter(function () {
+								return String($(this).data('formId')) === String(formId);
+							})
+							.data('original', status)
+							.val(status);
+					} else {
+						$select.val(original);
+						alert(
+							'Error updating form status: ' +
+								(response.data
+									? response.data.message
+									: 'Unknown error'),
+						);
+					}
+				})
+				.fail(function () {
+					$select.val(original);
+					alert('Failed to update form status.');
 				});
 		},
 	);

@@ -391,6 +391,7 @@ function elodin_recently_edited_get_gravity_forms_items() {
 		$items[] = array(
 			'id'           => $id,
 			'title'        => '' === trim( $title ) ? __( '(no title)', 'elodin-recently-edited' ) : $title,
+			'is_active'    => ! empty( $form['is_active'] ),
 			'status'       => ! empty( $form['is_active'] ) ? __( 'Active', 'elodin-recently-edited' ) : __( 'Inactive', 'elodin-recently-edited' ),
 			'date_created' => $date_created,
 			'date_updated' => $date_updated,
@@ -554,7 +555,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	return '<span class="' . esc_attr( $row_class ) . '" data-related-group="' . esc_attr( $group ) . '" data-post-type="' . esc_attr( $post->post_type ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
 		. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="' . esc_attr__( 'Pin', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
 		. '<span class="elodin-recently-edited-title">'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '">' . $title . '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '" data-resource-type="post" data-resource-id="' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '">' . $title . '</span>'
 		. '</span>'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
 		. '<select class="elodin-recently-edited-status-select" name="elodin_recently_edited_status_' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
@@ -582,25 +583,45 @@ function elodin_recently_edited_get_gravity_form_row( $form_item, $group = 'grav
 
 	$title       = esc_html( elodin_recently_edited_get_gravity_form_display_title( $form_item ) );
 	$full_title  = isset( $form_item['title'] ) ? (string) $form_item['title'] : '';
-	$status      = isset( $form_item['status'] ) ? (string) $form_item['status'] : '';
+	$is_active   = ! empty( $form_item['is_active'] );
 	$created_raw = ! empty( $form_item['date_created'] ) ? strtotime( $form_item['date_created'] ) : 0;
 	$updated_raw = ! empty( $form_item['date_updated'] ) ? strtotime( $form_item['date_updated'] ) : 0;
 	$date_format = 'n/j/y';
 	$created     = $created_raw ? date_i18n( $date_format, $created_raw ) : '';
 	$updated     = $updated_raw ? date_i18n( $date_format, $updated_raw ) : '';
 	$search_text = trim( wp_strip_all_tags( $full_title ) . ' ' . $id );
+	$status      = $is_active ? 'active' : 'inactive';
+	$can_edit    = function_exists( 'elodin_recently_edited_can_edit_gravity_forms' )
+		? elodin_recently_edited_can_edit_gravity_forms()
+		: current_user_can( 'gravityforms_edit_forms' );
+
+	$status_options = '';
+	$status_labels  = array(
+		'active'   => esc_html__( 'Active', 'elodin-recently-edited' ),
+		'inactive' => esc_html__( 'Inactive', 'elodin-recently-edited' ),
+	);
+	foreach ( $status_labels as $value => $label ) {
+		$selected        = $status === $value ? ' selected' : '';
+		$status_options .= '<option value="' . esc_attr( $value ) . '"' . $selected . '>' . esc_html( $label ) . '</option>';
+	}
+
+	$title_class = $can_edit ? 'elodin-recently-edited-title' : 'elodin-recently-edited-title elodin-recently-edited-title--locked';
+	$status_html = $can_edit
+		? '<select class="elodin-recently-edited-form-status-select" name="elodin_recently_edited_form_status_' . intval( $id ) . '" data-form-id="' . intval( $id ) . '" data-original="' . esc_attr( $status ) . '">' . $status_options . '</select>'
+		: '<span class="elodin-recently-edited-status-label">' . esc_html( $status_labels[ $status ] ) . '</span>';
+	$shortcode = '[gravityform id=' . intval( $id ) . ' title=false description=false ajax=true]';
 
 	return '<span class="elodin-recently-edited-row elodin-recently-edited-row--gravity-form" data-related-group="' . esc_attr( $group ) . '" data-post-type="gravity_forms" data-search-text="' . esc_attr( $search_text ) . '">'
 		. '<span></span>'
-		. '<span class="elodin-recently-edited-title elodin-recently-edited-title--locked">'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $form_item['view_url'] ) . '" data-new-tab="true" data-full-title="' . esc_attr( $full_title ) . '">' . $title . '</span>'
+		. '<span class="' . esc_attr( $title_class ) . '">'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $form_item['view_url'] ) . '" data-new-tab="true" data-resource-type="gravity_form" data-resource-id="' . intval( $id ) . '" data-full-title="' . esc_attr( $full_title ) . '">' . $title . '</span>'
 		. '</span>'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $form_item['edit_url'] ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
-		. '<span class="elodin-recently-edited-status-label">' . esc_html( $status ) . '</span>'
+		. $status_html
 		. '<span class="elodin-recently-edited-post-type-label">' . esc_html__( 'Form', 'elodin-recently-edited' ) . '</span>'
 		. '<span class="elodin-recently-edited-published" title="' . esc_attr__( 'Created', 'elodin-recently-edited' ) . '">' . esc_html( $created ) . '</span>'
 		. '<span class="elodin-recently-edited-modified" title="' . esc_attr__( 'Last updated', 'elodin-recently-edited' ) . '">' . esc_html( $updated ) . '</span>'
-		. '<span class="elodin-recently-edited-id" data-id="' . intval( $id ) . '">' . intval( $id ) . '</span>'
+		. '<span class="elodin-recently-edited-id" data-id="' . intval( $id ) . '" data-copy-text="' . esc_attr( $shortcode ) . '">' . intval( $id ) . '</span>'
 		. '</span>';
 }
 

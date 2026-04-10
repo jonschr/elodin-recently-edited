@@ -181,7 +181,8 @@
 		text-decoration: underline;
 	}
 
-	.elodin-recently-edited-status-select {
+	.elodin-recently-edited-status-select,
+	.elodin-recently-edited-form-status-select {
 		background: none;
 		border: none;
 		color: rgba(255, 255, 255, 0.7);
@@ -201,7 +202,9 @@
 	}
 
 	.elodin-recently-edited-status-select:hover,
-	.elodin-recently-edited-status-select:focus {
+	.elodin-recently-edited-status-select:focus,
+	.elodin-recently-edited-form-status-select:hover,
+	.elodin-recently-edited-form-status-select:focus {
 		color: #fff;
 		text-decoration: underline;
 	}
