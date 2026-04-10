@@ -333,7 +333,7 @@ jQuery(function ($) {
 			return;
 		}
 
-		if (e.metaKey || e.ctrlKey) {
+		if (e.metaKey || e.ctrlKey || $(this).data('newTab') === true) {
 			window.open(url, '_blank', 'noopener');
 			return;
 		}
@@ -601,6 +601,10 @@ jQuery(function ($) {
 			e.preventDefault();
 			e.stopPropagation();
 			var $title = $(this);
+			if ($title.hasClass('elodin-recently-edited-title--locked')) {
+				return;
+			}
+
 			var $link = $title.find('.elodin-recently-edited-title-link').first();
 			var originalTitle = $link.attr('data-full-title') || '';
 			var postId = $link.data('postId');

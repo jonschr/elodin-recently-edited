@@ -219,6 +219,10 @@ function elodin_recently_edited_get_current_post_type() {
 				$post_type = $screen->post_type;
 			}
 		}
+
+		if ( empty( $post_type ) && isset( $_GET['page'] ) && in_array( sanitize_key( $_GET['page'] ), array( 'gf_edit_forms', 'gf_new_form', 'gf_entries' ), true ) ) {
+			$post_type = 'gravity_forms';
+		}
 	} else {
 		if ( is_singular() ) {
 			$queried = get_queried_object();
@@ -240,6 +244,10 @@ function elodin_recently_edited_get_current_post_type() {
 		if ( empty( $post_type ) && is_home() ) {
 			$post_type = 'post';
 		}
+
+		if ( empty( $post_type ) && isset( $_GET['gf_page'] ) && 'preview' === sanitize_key( $_GET['gf_page'] ) ) {
+			$post_type = 'gravity_forms';
+		}
 	}
 
 	if ( empty( $post_type ) ) {
@@ -250,6 +258,10 @@ function elodin_recently_edited_get_current_post_type() {
 
 	if ( $post_type === 'attachment' ) {
 		$post_type = $default_post_type;
+	}
+
+	if ( 'gravity_forms' === $post_type && elodin_recently_edited_is_gravity_forms_available() ) {
+		return $post_type;
 	}
 
 	if ( ! get_post_type_object( $post_type ) ) {
@@ -320,6 +332,92 @@ function elodin_recently_edited_get_switchable_post_types() {
 	}
 
 	return $available;
+}
+
+/**
+ * Determine whether Gravity Forms can be listed in the menu.
+ *
+ * @since 1.3.0
+ *
+ * @return bool Whether Gravity Forms forms are available for the current user.
+ */
+function elodin_recently_edited_is_gravity_forms_available() {
+	if ( ! class_exists( 'GFFormsModel' ) && ! class_exists( 'RGFormsModel' ) ) {
+		return false;
+	}
+
+	if ( class_exists( 'GFCommon' ) && method_exists( 'GFCommon', 'current_user_can_any' ) ) {
+		return GFCommon::current_user_can_any( array( 'gravityforms_edit_forms', 'gravityforms_preview_forms' ) );
+	}
+
+	return current_user_can( 'gravityforms_edit_forms' ) || current_user_can( 'gravityforms_preview_forms' );
+}
+
+/**
+ * Get Gravity Forms records for the menu.
+ *
+ * @since 1.3.0
+ *
+ * @return array<int,array<string,mixed>> Forms as menu item arrays.
+ */
+function elodin_recently_edited_get_gravity_forms_items() {
+	if ( ! elodin_recently_edited_is_gravity_forms_available() ) {
+		return array();
+	}
+
+	$forms = array();
+	if ( class_exists( 'GFFormsModel' ) && method_exists( 'GFFormsModel', 'get_forms_columns' ) ) {
+		$forms = GFFormsModel::get_forms_columns( null, false, 'date_updated', 'DESC', array( 'id', 'title', 'date_created', 'date_updated', 'is_active' ) );
+	} elseif ( class_exists( 'RGFormsModel' ) && method_exists( 'RGFormsModel', 'get_forms' ) ) {
+		$forms = RGFormsModel::get_forms( null, 'date_created', 'DESC', false );
+	}
+
+	if ( ! is_array( $forms ) ) {
+		return array();
+	}
+
+	$items = array();
+	foreach ( $forms as $form ) {
+		$form = (array) $form;
+		$id   = isset( $form['id'] ) ? intval( $form['id'] ) : 0;
+		if ( ! $id ) {
+			continue;
+		}
+
+		$title        = isset( $form['title'] ) ? (string) $form['title'] : '';
+		$date_created = isset( $form['date_created'] ) ? (string) $form['date_created'] : '';
+		$date_updated = isset( $form['date_updated'] ) ? (string) $form['date_updated'] : '';
+
+		$items[] = array(
+			'id'           => $id,
+			'title'        => '' === trim( $title ) ? __( '(no title)', 'elodin-recently-edited' ) : $title,
+			'status'       => ! empty( $form['is_active'] ) ? __( 'Active', 'elodin-recently-edited' ) : __( 'Inactive', 'elodin-recently-edited' ),
+			'date_created' => $date_created,
+			'date_updated' => $date_updated,
+			'view_url'     => trailingslashit( site_url() ) . '?gf_page=preview&id=' . $id,
+			'edit_url'     => admin_url( 'admin.php?page=gf_edit_forms&id=' . $id ),
+			'modified_ts'  => $date_updated ? strtotime( $date_updated ) : strtotime( $date_created ),
+		);
+	}
+
+	return $items;
+}
+
+/**
+ * Get the title text displayed for a Gravity Forms row.
+ *
+ * @since 1.3.0
+ *
+ * @param array $form_item Form menu item.
+ * @return string Display title.
+ */
+function elodin_recently_edited_get_gravity_form_display_title( $form_item ) {
+	$title = isset( $form_item['title'] ) ? (string) $form_item['title'] : __( '(no title)', 'elodin-recently-edited' );
+	if ( strlen( $title ) > 40 ) {
+		$title = substr( $title, 0, 40 ) . '...';
+	}
+
+	return $title;
 }
 
 /**
@@ -468,6 +566,45 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 }
 
 /**
+ * Build the row HTML for a Gravity Forms form.
+ *
+ * @since 1.3.0
+ *
+ * @param array  $form_item Form menu item.
+ * @param string $group Related group slug.
+ * @return string Row HTML.
+ */
+function elodin_recently_edited_get_gravity_form_row( $form_item, $group = 'gravity_forms' ) {
+	$id = isset( $form_item['id'] ) ? intval( $form_item['id'] ) : 0;
+	if ( ! $id ) {
+		return '';
+	}
+
+	$title       = esc_html( elodin_recently_edited_get_gravity_form_display_title( $form_item ) );
+	$full_title  = isset( $form_item['title'] ) ? (string) $form_item['title'] : '';
+	$status      = isset( $form_item['status'] ) ? (string) $form_item['status'] : '';
+	$created_raw = ! empty( $form_item['date_created'] ) ? strtotime( $form_item['date_created'] ) : 0;
+	$updated_raw = ! empty( $form_item['date_updated'] ) ? strtotime( $form_item['date_updated'] ) : 0;
+	$date_format = 'n/j/y';
+	$created     = $created_raw ? date_i18n( $date_format, $created_raw ) : '';
+	$updated     = $updated_raw ? date_i18n( $date_format, $updated_raw ) : '';
+	$search_text = trim( wp_strip_all_tags( $full_title ) . ' ' . $id );
+
+	return '<span class="elodin-recently-edited-row elodin-recently-edited-row--gravity-form" data-related-group="' . esc_attr( $group ) . '" data-post-type="gravity_forms" data-search-text="' . esc_attr( $search_text ) . '">'
+		. '<span></span>'
+		. '<span class="elodin-recently-edited-title elodin-recently-edited-title--locked">'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $form_item['view_url'] ) . '" data-new-tab="true" data-full-title="' . esc_attr( $full_title ) . '">' . $title . '</span>'
+		. '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $form_item['edit_url'] ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
+		. '<span class="elodin-recently-edited-status-label">' . esc_html( $status ) . '</span>'
+		. '<span class="elodin-recently-edited-post-type-label">' . esc_html__( 'Form', 'elodin-recently-edited' ) . '</span>'
+		. '<span class="elodin-recently-edited-published" title="' . esc_attr__( 'Created', 'elodin-recently-edited' ) . '">' . esc_html( $created ) . '</span>'
+		. '<span class="elodin-recently-edited-modified" title="' . esc_attr__( 'Last updated', 'elodin-recently-edited' ) . '">' . esc_html( $updated ) . '</span>'
+		. '<span class="elodin-recently-edited-id" data-id="' . intval( $id ) . '">' . intval( $id ) . '</span>'
+		. '</span>';
+}
+
+/**
  * Build post rows for a menu under a specific related group.
  *
  * @since 1.3.0
@@ -507,6 +644,43 @@ function elodin_recently_edited_get_group_rows( $pinned_posts, $recent_posts, $p
 		}
 		$count++;
 
+		$item_class = 'elodin-recently-edited-list-item elodin-recently-edited-list-item--' . sanitize_html_class( $group );
+		if ( $is_active ) {
+			$item_class .= ' is-active';
+		}
+
+		$rows[] = '<div class="' . esc_attr( $item_class ) . '">' . $row . '</div>';
+	}
+
+	return $rows;
+}
+
+/**
+ * Build Gravity Forms rows for a menu group.
+ *
+ * @since 1.3.0
+ *
+ * @param array  $forms Forms as menu item arrays.
+ * @param string $group Related group slug.
+ * @param bool   $is_active Whether this group is initially visible.
+ * @return array Row HTML fragments.
+ */
+function elodin_recently_edited_get_gravity_forms_group_rows( $forms, $group = 'gravity_forms', $is_active = false ) {
+	$rows      = array();
+	$max_items = 200;
+	$count     = 0;
+
+	foreach ( $forms as $form_item ) {
+		if ( $count >= $max_items ) {
+			break;
+		}
+
+		$row = elodin_recently_edited_get_gravity_form_row( $form_item, $group );
+		if ( '' === $row ) {
+			continue;
+		}
+
+		$count++;
 		$item_class = 'elodin-recently-edited-list-item elodin-recently-edited-list-item--' . sanitize_html_class( $group );
 		if ( $is_active ) {
 			$item_class .= ' is-active';
@@ -785,8 +959,10 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 
 	$all_group_pinned_posts = elodin_recently_edited_merge_unique_posts( $all_pinned_lists );
 	$all_group_recent_posts = elodin_recently_edited_sort_posts_by_modified_desc( elodin_recently_edited_merge_unique_posts( $all_recent_lists ) );
-	$all_count              = elodin_recently_edited_count_group_rows( $all_group_pinned_posts, $all_group_recent_posts );
-	$active_group           = isset( $type_groups[ $current_post_type ] ) ? $current_post_type : 'all';
+	$gravity_forms_items    = elodin_recently_edited_get_gravity_forms_items();
+	$gravity_forms_count    = count( $gravity_forms_items );
+	$all_count              = elodin_recently_edited_count_group_rows( $all_group_pinned_posts, $all_group_recent_posts ) + $gravity_forms_count;
+	$active_group           = ( isset( $type_groups[ $current_post_type ] ) || ( 'gravity_forms' === $current_post_type && $gravity_forms_count ) ) ? $current_post_type : 'all';
 	$post_type_links        = array(
 		'<a class="elodin-related-pill' . ( 'all' === $active_group ? ' is-active' : '' ) . '" href="#" data-related-target="all" title="' . esc_attr__( 'All content types', 'elodin-recently-edited' ) . '">' . esc_html__( 'All', 'elodin-recently-edited' ) . '<span class="elodin-related-pill-count">' . number_format_i18n( $all_count ) . '</span></a>',
 	);
@@ -803,6 +979,18 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		}
 
 		$post_type_links[] = '<a class="' . esc_attr( $type_classes ) . '" href="' . esc_url( elodin_recently_edited_get_post_type_admin_url( $pt_slug ) ) . '" data-related-target="' . esc_attr( $pt_slug ) . '" title="' . esc_attr( $pt_slug ) . '">' . esc_html( $pt_obj->labels->name ) . '<span class="elodin-related-pill-count">' . number_format_i18n( $type_group['count'] ) . '</span></a>';
+	}
+
+	if ( elodin_recently_edited_is_gravity_forms_available() ) {
+		$type_classes = 'elodin-related-pill';
+		if ( 'gravity_forms' === $current_post_type ) {
+			$type_classes .= ' is-current';
+		}
+		if ( 'gravity_forms' === $active_group ) {
+			$type_classes .= ' is-active';
+		}
+
+		$post_type_links[] = '<a class="' . esc_attr( $type_classes ) . '" href="' . esc_url( admin_url( 'admin.php?page=gf_edit_forms' ) ) . '" data-related-target="gravity_forms" title="' . esc_attr__( 'Gravity Forms', 'elodin-recently-edited' ) . '">' . esc_html__( 'Forms', 'elodin-recently-edited' ) . '<span class="elodin-related-pill-count">' . number_format_i18n( $gravity_forms_count ) . '</span></a>';
 	}
 
 	$wp_admin_bar->add_menu(
@@ -845,6 +1033,10 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	);
 
 	$post_list_rows = elodin_recently_edited_get_group_rows( $all_group_pinned_posts, $all_group_recent_posts, $pinned_ids, 'all', 'all' === $active_group, $current_post_id );
+	$post_list_rows = array_merge(
+		$post_list_rows,
+		elodin_recently_edited_get_gravity_forms_group_rows( $gravity_forms_items, 'all', 'all' === $active_group )
+	);
 
 	foreach ( $type_groups as $pt_slug => $type_group ) {
 		$post_list_rows = array_merge(
@@ -852,6 +1044,11 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			elodin_recently_edited_get_group_rows( $type_group['pinned'], $type_group['recent'], $pinned_ids, $pt_slug, $pt_slug === $active_group, $current_post_id )
 		);
 	}
+
+	$post_list_rows = array_merge(
+		$post_list_rows,
+		elodin_recently_edited_get_gravity_forms_group_rows( $gravity_forms_items, 'gravity_forms', 'gravity_forms' === $active_group )
+	);
 
 	$wp_admin_bar->add_menu(
 		array(

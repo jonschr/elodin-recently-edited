@@ -235,6 +235,17 @@
 		text-decoration: underline;
 	}
 
+	.elodin-recently-edited-status-label,
+	.elodin-recently-edited-post-type-label {
+		color: rgba(255, 255, 255, 0.7);
+		font-size: 12px;
+		line-height: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	.elodin-recently-edited-pin {
 		display: inline-flex;
 		align-items: center;
