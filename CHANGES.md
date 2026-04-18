@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1 - 2026-04-18
+- Refined the licensing flow with a hidden admin page, in-place Ajax activation/refresh/deactivation, and a cleaner single-message success state.
+- Simplified the licensing page by removing extra product/status metadata, clearing the saved license key on deactivation, and suppressing unrelated admin notices on that screen.
+- Updated licensing copy to use generic license-key language in the plugin UI.
+- Expanded current-item highlighting so the full row reads as active, not just the title.
+- Increased the per-group Recently Edited item cap to 500 and centralized that limit behind a filterable helper.
+- Restored uniform `8px` padding on the content-type pill band.
+
 ## 1.4.0 - 2026-04-18
 - Added Lemon Squeezy licensing with a dedicated WordPress admin page for activating, refreshing, and deactivating site licenses.
 - Added a `Licensing` shortcut on the Plugins screen for direct access to the licensing page.
