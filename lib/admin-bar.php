@@ -273,6 +273,28 @@ function elodin_recently_edited_get_menu_post_statuses() {
 }
 
 /**
+ * Get the maximum number of items to load and render per menu group.
+ *
+ * @since 1.4.0
+ *
+ * @return int Item limit.
+ */
+function elodin_recently_edited_get_menu_item_limit() {
+	$limit = 500;
+
+	/**
+	 * Filter the maximum number of items loaded per Recently Edited group.
+	 *
+	 * @since 1.4.0
+	 *
+	 * @param int $limit Item limit.
+	 */
+	$limit = (int) apply_filters( 'elodin_recently_edited_menu_item_limit', $limit );
+
+	return max( 1, $limit );
+}
+
+/**
  * Prepare WP_Query arguments for admin-bar menu lookups.
  *
  * Menu lists should reflect editable content, not front-end archive semantics.
@@ -804,7 +826,7 @@ function elodin_recently_edited_get_gravity_form_row( $form_item, $group = 'grav
  */
 function elodin_recently_edited_get_group_rows( $pinned_posts, $recent_posts, $pinned_ids, $group, $is_active = false, $current_post_id = 0 ) {
 	$count     = 0;
-	$max_items = 200;
+	$max_items = elodin_recently_edited_get_menu_item_limit();
 	$seen_ids  = array();
 	$all_posts = array_merge( $pinned_posts, $recent_posts );
 	$rows      = array();
@@ -852,7 +874,7 @@ function elodin_recently_edited_get_group_rows( $pinned_posts, $recent_posts, $p
  */
 function elodin_recently_edited_get_gravity_forms_group_rows( $forms, $group = 'gravity_forms', $is_active = false ) {
 	$rows      = array();
-	$max_items = 200;
+	$max_items = elodin_recently_edited_get_menu_item_limit();
 	$count     = 0;
 
 	foreach ( $forms as $form_item ) {
@@ -888,7 +910,7 @@ function elodin_recently_edited_get_gravity_forms_group_rows( $forms, $group = '
  */
 function elodin_recently_edited_count_group_rows( $pinned_posts, $recent_posts ) {
 	$count     = 0;
-	$max_items = 200;
+	$max_items = elodin_recently_edited_get_menu_item_limit();
 	$seen_ids  = array();
 	$all_posts = array_merge( $pinned_posts, $recent_posts );
 
@@ -1014,6 +1036,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	$pinned_ids = array_filter( $pinned_ids );
 
 	$menu_post_statuses = elodin_recently_edited_get_menu_post_statuses();
+	$menu_item_limit    = elodin_recently_edited_get_menu_item_limit();
 	$pinned_posts       = array();
 	if ( ! empty( $pinned_ids ) ) {
 		$pinned_posts = get_posts(
@@ -1036,7 +1059,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 			'post_type'         => 'any',
 			'post_type__not_in' => array( 'attachment' ), // Exclude media attachments
 			'post_status'       => $menu_post_statuses,
-			'posts_per_page'    => 500, // Fetch extra candidates to account for filtering.
+			'posts_per_page'    => $menu_item_limit,
 			'orderby'           => 'modified',
 			'order'             => 'DESC',
 		)
@@ -1099,27 +1122,27 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		if ( ! empty( $pinned_ids ) ) {
 			$type_pinned_posts = get_posts(
 				elodin_recently_edited_prepare_menu_query_args(
-					array(
-						'post_type'      => $pt_slug,
-						'post__in'       => $pinned_ids,
-						'orderby'        => 'post__in',
-						'post_status'    => $menu_post_statuses,
-						'posts_per_page' => 200,
+						array(
+							'post_type'      => $pt_slug,
+							'post__in'       => $pinned_ids,
+							'orderby'        => 'post__in',
+							'post_status'    => $menu_post_statuses,
+							'posts_per_page' => $menu_item_limit,
+						)
 					)
-				)
-			);
+				);
 			$type_pinned_posts = elodin_recently_edited_filter_menu_posts( $type_pinned_posts );
 		}
 
 		$type_recent_posts = get_posts(
 			elodin_recently_edited_prepare_menu_query_args(
 				array(
-					'post_type'      => $pt_slug,
-					'post_status'    => $menu_post_statuses,
-					'posts_per_page' => 500,
-					'orderby'        => array(
-						'menu_order' => 'ASC',
-						'modified'   => 'DESC',
+						'post_type'      => $pt_slug,
+						'post_status'    => $menu_post_statuses,
+						'posts_per_page' => $menu_item_limit,
+						'orderby'        => array(
+							'menu_order' => 'ASC',
+							'modified'   => 'DESC',
 					),
 				)
 			)

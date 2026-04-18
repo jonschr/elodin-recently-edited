@@ -88,6 +88,34 @@
 		color: #f4c542;
 	}
 
+	.elodin-recently-edited-row--current .elodin-recently-edited-slug-text,
+	.elodin-recently-edited-row--current .elodin-recently-edited-action,
+	.elodin-recently-edited-row--current .elodin-recently-edited-status-select,
+	.elodin-recently-edited-row--current .elodin-recently-edited-post-type-select,
+	.elodin-recently-edited-row--current .elodin-recently-edited-status-label,
+	.elodin-recently-edited-row--current .elodin-recently-edited-post-type-label,
+	.elodin-recently-edited-row--current .elodin-recently-edited-published,
+	.elodin-recently-edited-row--current .elodin-recently-edited-modified,
+	.elodin-recently-edited-row--current .elodin-recently-edited-id,
+	.elodin-recently-edited-row--current .elodin-recently-edited-pin {
+		color: #f4c542 !important;
+	}
+
+	.elodin-recently-edited-row--current .elodin-recently-edited-slug-text:hover,
+	.elodin-recently-edited-row--current .elodin-recently-edited-action:hover,
+	.elodin-recently-edited-row--current .elodin-recently-edited-status-select:hover,
+	.elodin-recently-edited-row--current .elodin-recently-edited-status-select:focus,
+	.elodin-recently-edited-row--current .elodin-recently-edited-post-type-select:hover,
+	.elodin-recently-edited-row--current .elodin-recently-edited-post-type-select:focus,
+	.elodin-recently-edited-row--current .elodin-recently-edited-pin:hover {
+		color: #f4c542 !important;
+	}
+
+	.elodin-recently-edited-row--current .elodin-recently-edited-id {
+		border-color: rgba(244, 197, 66, 0.38);
+		background: rgba(244, 197, 66, 0.1);
+	}
+
 	.elodin-recently-edited-title {
 		grid-column: 2 / 3;
 		display: flex;
