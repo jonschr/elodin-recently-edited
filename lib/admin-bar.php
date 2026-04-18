@@ -671,6 +671,8 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	}
 
 	$title_url = elodin_recently_edited_get_post_title_link( $post, $edit_url );
+	$edit_new_tab_attr = elodin_recently_edited_is_elementor_post( $post ) ? ' data-new-tab="true"' : '';
+	$title_new_tab_attr = ( $title_url === $edit_url && elodin_recently_edited_is_elementor_post( $post ) ) ? ' data-new-tab="true"' : '';
 
 	$date_format   = 'n/j/y';
 	$published_raw = get_post_time( 'U', false, $post );
@@ -711,12 +713,12 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	return '<span class="' . esc_attr( $row_class ) . '" data-related-group="' . esc_attr( $group ) . '" data-post-type="' . esc_attr( $post->post_type ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
 		. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="' . esc_attr__( 'Pin', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
 		. '<span class="elodin-recently-edited-title">'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '" data-resource-type="post" data-resource-id="' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '">' . $title . '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '"' . $title_new_tab_attr . ' data-resource-type="post" data-resource-id="' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '">' . $title . '</span>'
 		. '</span>'
 		. '<span class="elodin-recently-edited-slug">'
 		. '<span class="elodin-recently-edited-slug-text" data-post-id="' . intval( $post->ID ) . '" data-full-slug="' . esc_attr( $post->post_name ) . '" data-copy-text="' . esc_url( $copy_url ) . '">' . $slug . '</span>'
 		. '</span>'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '"' . $edit_new_tab_attr . '>' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
 		. '<select class="elodin-recently-edited-status-select" name="elodin_recently_edited_status_' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
 		. '<select class="elodin-recently-edited-post-type-select" name="elodin_recently_edited_post_type_' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_type ) . '">' . $post_type_options . '</select>'
 		. '<span class="elodin-recently-edited-published" title="' . esc_attr( $published_title ) . '">' . esc_html( $published ) . '</span>'

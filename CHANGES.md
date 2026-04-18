@@ -14,7 +14,7 @@
 - Added Escape handling so cancelling an inline title edit does not close the full dropdown.
 - Added Gravity Forms as a supported content type when Gravity Forms is active.
 - Added Gravity Forms preview links that open in a new tab, edit links to the form editor, notification settings links, inline form title editing, Active/Inactive status editing, and shortcode copying from the form ID.
-- Routed Edit links for Elementor-built posts to the Elementor editor instead of the regular WordPress editor.
+- Routed Edit links for Elementor-built posts to the Elementor editor instead of the regular WordPress editor, and open those Elementor links in a new tab.
 - Normalized front-end and admin menu queries so public editable content types, including Modern Tribe Events, appear consistently across contexts.
 
 ## 1.2.2 - 2026-02-26
