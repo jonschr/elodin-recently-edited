@@ -468,7 +468,7 @@
 		display: flex !important;
 		flex-wrap: wrap !important;
 		gap: 4px !important;
-		padding: 8px 100px 8px 8px !important;
+		padding: 8px !important;
 		margin: 0 !important;
 		background: rgba(0, 0, 0, 0.18) !important;
 		border-top: 1px solid rgba(255, 255, 255, 0.08) !important;

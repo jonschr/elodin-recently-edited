@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 - 2026-04-18
+- Added Lemon Squeezy licensing with a dedicated WordPress admin page for activating, refreshing, and deactivating site licenses.
+- Added a `Licensing` shortcut on the Plugins screen for direct access to the licensing page.
+- Added unlicensed admin notices and disabled the plugin's runtime functionality until a valid license is active, while leaving update checks untouched.
+- Added periodic background license revalidation for administrators and stored license metadata such as instance, customer, product, and expiry details.
+- Added product/store/variant constraint hooks and constants so release builds can verify a license belongs to the intended Lemon Squeezy product.
+
 ## 1.3.1 - 2026-04-10
 - Combined the former Recently Edited and Related admin-bar dropdowns into a single starred Recently Edited menu.
 - Added content-type pills inside the menu, including an All view and per-type lists that switch on click.

@@ -16,7 +16,7 @@
  */
 function elodin_recently_edited_enqueue_assets() {
 	// Only load assets if admin bar is visible
-	if ( ! is_admin_bar_showing() ) {
+	if ( ! is_admin_bar_showing() || ! elodin_recently_edited_runtime_enabled() ) {
 		return;
 	}
 

@@ -987,7 +987,7 @@ function elodin_recently_edited_sort_posts_by_modified_desc( $posts ) {
  * @param WP_Admin_Bar $wp_admin_bar Admin bar object.
  */
 function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
-	if ( ! is_admin_bar_showing() ) {
+	if ( ! is_admin_bar_showing() || ! elodin_recently_edited_runtime_enabled() ) {
 		return;
 	}
 
