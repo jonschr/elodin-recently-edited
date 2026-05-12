@@ -35,6 +35,70 @@ define( 'ELODIN_RECENTLY_EDITED_VERSION', '1.4.1' );
 define( 'ELODIN_RECENTLY_EDITED_BASENAME', plugin_basename( __FILE__ ) );
 define( 'ELODIN_RECENTLY_EDITED_LEMON_PRODUCT_ID', 984046 );
 
+/**
+ * Determine whether the current request is an AJAX action owned by this plugin.
+ *
+ * @return bool
+ */
+function elodin_recently_edited_is_plugin_ajax_request() {
+	if ( ! function_exists( 'wp_doing_ajax' ) || ! wp_doing_ajax() ) {
+		return false;
+	}
+
+	$action = isset( $_REQUEST['action'] ) ? sanitize_key( wp_unslash( $_REQUEST['action'] ) ) : '';
+
+	return 0 === strpos( $action, 'elodin_recently_edited_' );
+}
+
+/**
+ * Determine whether the current request is likely a REST request.
+ *
+ * REST_REQUEST is not always defined when plugins are loaded, so inspect the
+ * request path too.
+ *
+ * @return bool
+ */
+function elodin_recently_edited_is_rest_request() {
+	if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+		return true;
+	}
+
+	if ( isset( $_GET['rest_route'] ) ) {
+		return true;
+	}
+
+	$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+	if ( '' === $request_uri ) {
+		return false;
+	}
+
+	$rest_prefix = function_exists( 'rest_get_url_prefix' ) ? rest_get_url_prefix() : 'wp-json';
+
+	return false !== strpos( $request_uri, '/' . trim( $rest_prefix, '/' ) . '/' );
+}
+
+/**
+ * Determine whether this request should load front-end/admin-bar runtime.
+ *
+ * @return bool
+ */
+function elodin_recently_edited_should_boot_runtime() {
+	if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+		return elodin_recently_edited_is_plugin_ajax_request();
+	}
+
+	if ( elodin_recently_edited_is_rest_request() ) {
+		return false !== strpos( isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '', '/elodin-recently-edited/v1/' )
+			|| isset( $_GET['rest_route'] ) && false !== strpos( (string) wp_unslash( $_GET['rest_route'] ), '/elodin-recently-edited/v1/' );
+	}
+
+	return true;
+}
+
+if ( ! elodin_recently_edited_should_boot_runtime() ) {
+	return;
+}
+
 // Include library files with proper path validation
 $library_files = array(
 	'licensing.php',
@@ -65,7 +129,7 @@ add_action( 'wp_ajax_elodin_recently_edited_update_slug', 'elodin_recently_edite
 
 // Load Plugin Update Checker with error handling
 $update_checker_file = ELODIN_RECENTLY_EDITED_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php';
-if ( file_exists( $update_checker_file ) ) {
+if ( is_admin() && ! ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) && ! elodin_recently_edited_is_rest_request() && file_exists( $update_checker_file ) ) {
 	require $update_checker_file;
 
 	if ( class_exists( 'Puc_v4_Factory' ) ) {

@@ -48,6 +48,9 @@ function elodin_recently_edited_toggle_pin() {
 
 	// Save updated pins
 	update_user_meta( $user_id, 'elodin_recently_edited_pins', $pinned );
+	if ( function_exists( 'elodin_recently_edited_clear_menu_cache' ) ) {
+		elodin_recently_edited_clear_menu_cache();
+	}
 	wp_send_json_success( array( 'state' => $state ) );
 }
 
@@ -107,6 +110,10 @@ function elodin_recently_edited_update_status() {
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error( array( 'message' => 'Failed to update status.' ), 500 );
 		}
+	}
+
+	if ( function_exists( 'elodin_recently_edited_clear_menu_cache' ) ) {
+		elodin_recently_edited_clear_menu_cache();
 	}
 
 	wp_send_json_success();
@@ -198,6 +205,10 @@ function elodin_recently_edited_update_gravity_form_status() {
 		wp_send_json_error( array( 'message' => 'Gravity Forms API unavailable.' ), 500 );
 	}
 
+	if ( function_exists( 'elodin_recently_edited_clear_menu_cache' ) ) {
+		elodin_recently_edited_clear_menu_cache();
+	}
+
 	wp_send_json_success(
 		array(
 			'status' => $status,
@@ -251,6 +262,10 @@ function elodin_recently_edited_update_gravity_form_title( $form_id, $title ) {
 	$display_title = function_exists( 'elodin_recently_edited_get_gravity_form_display_title' )
 		? elodin_recently_edited_get_gravity_form_display_title( array( 'title' => $updated_title ) )
 		: $updated_title;
+
+	if ( function_exists( 'elodin_recently_edited_clear_menu_cache' ) ) {
+		elodin_recently_edited_clear_menu_cache();
+	}
 
 	wp_send_json_success(
 		array(
@@ -323,6 +338,10 @@ function elodin_recently_edited_update_title() {
 		? elodin_recently_edited_get_display_title( $post )
 		: $post->post_title;
 
+	if ( function_exists( 'elodin_recently_edited_clear_menu_cache' ) ) {
+		elodin_recently_edited_clear_menu_cache();
+	}
+
 	wp_send_json_success(
 		array(
 			'title'        => $post->post_title,
@@ -387,6 +406,10 @@ function elodin_recently_edited_update_slug() {
 		: get_permalink( $post->ID );
 	$copy_url     = get_permalink( $post->ID );
 
+	if ( function_exists( 'elodin_recently_edited_clear_menu_cache' ) ) {
+		elodin_recently_edited_clear_menu_cache();
+	}
+
 	wp_send_json_success(
 		array(
 			'slug'        => $post->post_name,
@@ -437,6 +460,10 @@ function elodin_recently_edited_update_post_type() {
 
 	if ( is_wp_error( $result ) ) {
 		wp_send_json_error( array( 'message' => 'Failed to update post type.' ), 500 );
+	}
+
+	if ( function_exists( 'elodin_recently_edited_clear_menu_cache' ) ) {
+		elodin_recently_edited_clear_menu_cache();
 	}
 
 	wp_send_json_success();

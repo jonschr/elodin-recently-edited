@@ -971,7 +971,7 @@ function elodin_recently_edited_handle_deactivate_license() {
  * @return void
  */
 function elodin_recently_edited_maybe_revalidate_license() {
-	if ( ! is_admin() || ! current_user_can( 'manage_options' ) || wp_doing_ajax() || elodin_recently_edited_is_license_page() ) {
+	if ( wp_doing_ajax() || ! is_admin() || ! current_user_can( 'manage_options' ) || elodin_recently_edited_is_license_page() ) {
 		return;
 	}
 
