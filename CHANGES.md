@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.2 - 2026-05-12
+- Reworked the admin-bar menu to use an explicit “Build Initial Index” flow with browser-side caching, avoiding repeated index builds across page loads.
+- Added a REST-powered menu index that is cached globally on the server and hydrated from local browser storage when available.
+- Prevented unrelated REST and AJAX requests from loading the plugin runtime, admin-bar code, assets, AJAX handlers, or update checker.
+- Reduced menu payload size by rendering one canonical row set and filtering it client-side by content type.
+- Preserved up to 500 items per content type while keeping the All view based on the combined per-type index.
+- Improved search responsiveness with an in-memory row index and direct DOM visibility updates.
+- Added small-site automatic index preloading only when no browser cache exists and the site has fewer than 100 editable posts.
+- Cleared browser-side menu cache after pin, title, slug, status, form status, and post type changes so refreshed menus reflect edits.
+- Cleaned up the unloaded dropdown state with a focused index-building panel and explicit styling.
+
 ## 1.4.1 - 2026-04-18
 - Refined the licensing flow with a hidden admin page, in-place Ajax activation/refresh/deactivation, and a cleaner single-message success state.
 - Simplified the licensing page by removing extra product/status metadata, clearing the saved license key on deactivation, and suppressing unrelated admin notices on that screen.

@@ -368,6 +368,76 @@
 		padding: 0 0 6px !important;
 	}
 
+	.elodin-recently-edited-shell-hidden {
+		display: none !important;
+	}
+
+	.elodin-recently-edited-shell-item > .ab-item {
+		padding: 0 !important;
+		height: auto !important;
+		min-height: 0 !important;
+		line-height: normal !important;
+		cursor: default !important;
+	}
+
+	.elodin-recently-edited-shell {
+		box-sizing: border-box;
+		padding: 14px;
+		width: 320px;
+		max-width: 100%;
+		background: #1f2328;
+		color: #fff;
+	}
+
+	.elodin-recently-edited-shell-title {
+		margin: 0 0 5px;
+		color: #fff;
+		font-size: 13px;
+		font-weight: 600;
+		line-height: 1.25;
+	}
+
+	.elodin-recently-edited-shell-copy {
+		margin: 0 0 12px;
+		color: rgba(255, 255, 255, 0.68);
+		font-size: 12px;
+		line-height: 1.35;
+		white-space: normal;
+	}
+
+	.elodin-recently-edited-load-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		box-sizing: border-box;
+		min-height: 30px;
+		padding: 6px 10px;
+		border: 1px solid rgba(244, 197, 66, 0.72);
+		border-radius: 4px;
+		background: rgba(244, 197, 66, 0.16);
+		color: #fff;
+		font-size: 12px;
+		font-weight: 600;
+		line-height: 1.2;
+		cursor: pointer;
+		box-shadow: none;
+		appearance: none;
+		-webkit-appearance: none;
+	}
+
+	.elodin-recently-edited-load-button:hover,
+	.elodin-recently-edited-load-button:focus {
+		background: rgba(244, 197, 66, 0.24);
+		border-color: rgba(244, 197, 66, 0.95);
+		color: #fff;
+		outline: none;
+	}
+
+	.elodin-recently-edited-load-button:disabled {
+		cursor: wait;
+		opacity: 0.7;
+	}
+
 	#wpadminbar & .ab-submenu .wp-admin-bar-recently-edited-default,
 	#wpadminbar & .wp-admin-bar-recently-edited-default {
 		padding-top: 0 !important;
@@ -465,6 +535,7 @@
 		overflow-x: hidden;
 		padding: 0 0 6px;
 		box-sizing: border-box;
+		contain: content;
 		scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
 		scrollbar-width: thin;
 	}
@@ -490,6 +561,9 @@
 		box-sizing: border-box;
 		min-height: 26px;
 		padding: 0 8px;
+		contain: layout paint style;
+		content-visibility: auto;
+		contain-intrinsic-size: 26px;
 	}
 
 	.elodin-related-pill-band {

@@ -49,6 +49,8 @@ function elodin_recently_edited_enqueue_assets() {
 			'restNonce'     => wp_create_nonce( 'wp_rest' ),
 			'currentPostType' => function_exists( 'elodin_recently_edited_get_current_post_type' ) ? elodin_recently_edited_get_current_post_type() : '',
 			'currentPostId'   => function_exists( 'elodin_recently_edited_get_current_post_id' ) ? elodin_recently_edited_get_current_post_id() : 0,
+			'cacheKey'        => 'elodin_recently_edited_menu_' . md5( home_url() ),
+			'cacheSchema'     => 1,
 		)
 	);
 
