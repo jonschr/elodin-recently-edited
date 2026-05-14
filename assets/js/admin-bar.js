@@ -11,6 +11,7 @@ jQuery(function ($) {
 	var closeTimers = {};
 	var menuLoadRequest = null;
 	var rowIndex = null;
+	var isMac = /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || '');
 
 	function storageKey(menuId) {
 		return 'elodin_recently_edited_keep_menu_open';
@@ -24,8 +25,27 @@ jQuery(function ($) {
 		return 'elodin_recently_edited_active_group';
 	}
 
+	function selectionStorageKey(menuId) {
+		return 'elodin_recently_edited_selected_row';
+	}
+
 	function normalizeSearchText(value) {
 		return (value || '').toString().toLowerCase().trim();
+	}
+
+	function isKeyboardEventForE(event) {
+		return event.code === 'KeyE' || String(event.key || '').toLowerCase() === 'e';
+	}
+
+	function getSearchShortcutLabel() {
+		return isMac ? 'Cmd+Shift+E' : 'Ctrl+Shift+E';
+	}
+
+	function updateSearchPlaceholder() {
+		$('.elodin-recently-edited-search-input').attr(
+			'placeholder',
+			'Search recently edited... (' + getSearchShortcutLabel() + ')',
+		);
 	}
 
 	function setScrollbarWidthVariable() {
@@ -121,6 +141,7 @@ jQuery(function ($) {
 		replaceAdminBarNode('recently-edited-column-header', nodes.columnHeader.title);
 		replaceAdminBarNode('recently-edited-post-list', nodes.postList.title);
 		invalidateRowIndex();
+		updateSearchPlaceholder();
 
 		$menu
 			.find('.elodin-recently-edited-shell-hidden')
@@ -132,11 +153,15 @@ jQuery(function ($) {
 		$menu.removeClass('elodin-recently-edited-is-lazy');
 		setScrollbarWidthVariable();
 
-		var storedGroup = sessionStorage.getItem(groupStorageKey($menu.attr('id')));
+		var storedGroup =
+			sessionStorage.getItem(groupStorageKey($menu.attr('id'))) ||
+			$menu.data('restoreGroup');
 		if (storedGroup) {
 			switchRelatedGroup($menu, storedGroup);
 		}
+		$menu.removeData('restoreGroup');
 		restoreScrollPosition($menu.attr('id'));
+		selectStoredVisibleRowOrCurrentOrFirst();
 
 		return true;
 	}
@@ -150,13 +175,13 @@ jQuery(function ($) {
 		return hydrateRecentlyEditedMenu(cached.nodes);
 	}
 
-	function scheduleSmallSitePreload() {
+	function scheduleMenuIndexBuild() {
 		if (hydrateRecentlyEditedMenuFromCache()) {
 			return;
 		}
 
 		window.setTimeout(function () {
-			loadRecentlyEditedMenu({ preload: true });
+			loadRecentlyEditedMenu();
 		}, 0);
 	}
 
@@ -207,11 +232,11 @@ jQuery(function ($) {
 		options = options || {};
 		var $menu = $('#wp-admin-bar-recently-edited');
 		if (!$menu.length || !$menu.hasClass('elodin-recently-edited-is-lazy')) {
-			return;
+			return null;
 		}
 
 		if (menuLoadRequest) {
-			return;
+			return menuLoadRequest;
 		}
 
 		menuLoadRequest = $.ajax({
@@ -245,8 +270,12 @@ jQuery(function ($) {
 					'recently-edited-post-list',
 					'<div class="elodin-recently-edited-post-list"><div class="elodin-recently-edited-loading">Unable to load recently edited content.</div></div>',
 				);
+			})
+			.always(function () {
 				menuLoadRequest = null;
 			});
+
+		return menuLoadRequest;
 	}
 
 	function filterMenuItems($menu, query) {
@@ -275,10 +304,288 @@ jQuery(function ($) {
 		} else {
 			$noMatchesItem.toggle(matchCount === 0);
 		}
+
+		selectFirstVisibleRow();
 	}
 
 	function getOpenMenu() {
 		return $('#wp-admin-bar-recently-edited.hover').first();
+	}
+
+	function getVisibleIndexedRows() {
+		return getRowIndex().filter(function (indexedRow) {
+			return (
+				indexedRow.item.classList.contains('is-active') &&
+				indexedRow.item.style.display !== 'none'
+			);
+		});
+	}
+
+	function setSelectedIndexedRow(indexedRow) {
+		var $menu = $('#wp-admin-bar-recently-edited');
+		$menu
+			.find('.elodin-recently-edited-list-item.is-keyboard-selected')
+			.removeClass('is-keyboard-selected');
+
+		if (!indexedRow || !indexedRow.item) {
+			return;
+		}
+
+		indexedRow.item.classList.add('is-keyboard-selected');
+		indexedRow.item.scrollIntoView({ block: 'nearest' });
+	}
+
+	function selectFirstVisibleRow() {
+		setSelectedIndexedRow(getVisibleIndexedRows()[0]);
+	}
+
+	function selectCurrentVisibleRowOrFirst() {
+		var currentPostId = parseInt(ElodinRecentlyEdited.currentPostId || 0, 10);
+		var currentRow = getVisibleIndexedRows().find(function (indexedRow) {
+			if (indexedRow.row.classList.contains('elodin-recently-edited-row--current')) {
+				return true;
+			}
+
+			if (!currentPostId) {
+				return false;
+			}
+
+			return (
+				$(indexedRow.row)
+					.find('[data-post-id="' + currentPostId + '"]')
+					.length > 0
+			);
+		});
+
+		setSelectedIndexedRow(currentRow || getVisibleIndexedRows()[0]);
+	}
+
+	function getRowSelectionData($row) {
+		var $resource = $row.find('[data-resource-type][data-resource-id]').first();
+		if ($resource.length) {
+			return {
+				group: $row.attr('data-post-type') || $row.attr('data-related-group') || 'all',
+				resourceId: String($resource.data('resourceId') || ''),
+				resourceType: String($resource.data('resourceType') || ''),
+			};
+		}
+
+		return null;
+	}
+
+	function storeRowSelection(menuId, $row) {
+		var selection = getRowSelectionData($row);
+		if (!selection || !selection.resourceId || !selection.resourceType) {
+			sessionStorage.removeItem(selectionStorageKey(menuId));
+			return;
+		}
+
+		sessionStorage.setItem(selectionStorageKey(menuId), JSON.stringify(selection));
+	}
+
+	function selectStoredVisibleRowOrCurrentOrFirst() {
+		var $menu = $('#wp-admin-bar-recently-edited');
+		var storedSelection = $menu.data('restoreSelection');
+		var selectedRow = null;
+
+		if (storedSelection && storedSelection.resourceId && storedSelection.resourceType) {
+			selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
+				var $resource = $(indexedRow.row)
+					.find(
+						'[data-resource-type="' +
+							storedSelection.resourceType +
+							'"][data-resource-id="' +
+							storedSelection.resourceId +
+							'"]',
+					)
+					.first();
+
+				return $resource.length > 0;
+			});
+		}
+
+		if (selectedRow) {
+			setSelectedIndexedRow(selectedRow);
+			$menu.removeData('restoreSelection');
+			return;
+		}
+
+		$menu.removeData('restoreSelection');
+		selectCurrentVisibleRowOrFirst();
+	}
+
+	function selectRelativeVisibleRow(step) {
+		var visibleRows = getVisibleIndexedRows();
+		if (!visibleRows.length) {
+			setSelectedIndexedRow(null);
+			return;
+		}
+
+		var selectedIndex = visibleRows.findIndex(function (indexedRow) {
+			return indexedRow.item.classList.contains('is-keyboard-selected');
+		});
+
+		if (selectedIndex < 0) {
+			selectedIndex = step > 0 ? -1 : 0;
+		}
+
+		selectedIndex = Math.max(
+			0,
+			Math.min(visibleRows.length - 1, selectedIndex + step),
+		);
+		setSelectedIndexedRow(visibleRows[selectedIndex]);
+	}
+
+	function openSelectedRow(useEditUrl) {
+		var selected = getVisibleIndexedRows().find(function (indexedRow) {
+			return indexedRow.item.classList.contains('is-keyboard-selected');
+		});
+
+		if (!selected) {
+			selected = getVisibleIndexedRows()[0];
+		}
+		if (!selected || !selected.row) {
+			return;
+		}
+
+		var $row = $(selected.row);
+		storeRowSelection('wp-admin-bar-recently-edited', $row);
+		var $target = useEditUrl
+			? $row.find('.elodin-recently-edited-edit').first()
+			: $row.find('.elodin-recently-edited-title-link').first();
+		if (!$target.length) {
+			return;
+		}
+
+		$target.trigger('click');
+	}
+
+	function switchRelativeGroup(step) {
+		var $menu = $('#wp-admin-bar-recently-edited');
+		var $pills = $menu.find('.elodin-related-pill');
+		if (!$pills.length) {
+			return;
+		}
+
+		var activeIndex = $pills.index($pills.filter('.is-active').first());
+		if (activeIndex < 0) {
+			activeIndex = 0;
+		}
+
+		var nextIndex = (activeIndex + step + $pills.length) % $pills.length;
+		switchRelatedGroup($menu, $pills.eq(nextIndex).data('relatedTarget'));
+		selectFirstVisibleRow();
+	}
+
+	function focusRecentlyEditedSearch() {
+		var $menu = $('#wp-admin-bar-recently-edited');
+		if (!$menu.length) {
+			return;
+		}
+
+		cancelClose($menu.attr('id'));
+		$menu.addClass('hover elodin-recently-edited-grace-open');
+
+		if ($menu.hasClass('elodin-recently-edited-is-lazy')) {
+			var request = loadRecentlyEditedMenu();
+			if (request) {
+				request.done(function () {
+					focusRecentlyEditedSearch();
+				});
+			}
+			return;
+		}
+
+		var $input = $menu.find('.elodin-recently-edited-search-input').first();
+		if (!$input.length) {
+			return;
+		}
+
+		switchRelatedGroup($menu, 'all');
+		$input.focus().select();
+		selectFirstVisibleRow();
+	}
+
+	function getCurrentEditUrl() {
+		if (ElodinRecentlyEdited.currentEditUrl) {
+			return ElodinRecentlyEdited.currentEditUrl;
+		}
+
+		var $currentRowEdit = $(
+			'#wp-admin-bar-recently-edited .elodin-recently-edited-row--current .elodin-recently-edited-edit',
+		).first();
+		if ($currentRowEdit.length && $currentRowEdit.data('url')) {
+			return $currentRowEdit.data('url');
+		}
+
+		var $wpEditLink = $('#wp-admin-bar-edit > .ab-item').first();
+		if ($wpEditLink.length && $wpEditLink.attr('href')) {
+			return $wpEditLink.attr('href');
+		}
+
+		return '';
+	}
+
+	function getCurrentViewUrl() {
+		if (ElodinRecentlyEdited.currentViewUrl) {
+			return ElodinRecentlyEdited.currentViewUrl;
+		}
+
+		var $wpViewLink = $('#wp-admin-bar-view > .ab-item').first();
+		if ($wpViewLink.length && $wpViewLink.attr('href')) {
+			return $wpViewLink.attr('href');
+		}
+
+		return '';
+	}
+
+	function openCurrentToggleUrl() {
+		var url = ElodinRecentlyEdited.isAdmin ? getCurrentViewUrl() : getCurrentEditUrl();
+		if (!url || url === '#') {
+			return false;
+		}
+
+		window.location.href = url;
+		return true;
+	}
+
+	function handleMenuNavigationKeydown(e) {
+		var $menu = getOpenMenu();
+		if (!$menu.length || $menu.hasClass('elodin-recently-edited-is-lazy')) {
+			return false;
+		}
+
+		if (e.key === 'Escape') {
+			clearKeepOpenState($menu.attr('id'));
+			return true;
+		}
+
+		if (e.key === 'ArrowDown') {
+			selectRelativeVisibleRow(1);
+			return true;
+		}
+
+		if (e.key === 'ArrowUp') {
+			selectRelativeVisibleRow(-1);
+			return true;
+		}
+
+		if (e.key === 'ArrowRight') {
+			switchRelativeGroup(1);
+			return true;
+		}
+
+		if (e.key === 'ArrowLeft') {
+			switchRelativeGroup(-1);
+			return true;
+		}
+
+		if (e.key === 'Enter') {
+			openSelectedRow(isMac ? e.metaKey : e.ctrlKey);
+			return true;
+		}
+
+		return false;
 	}
 
 	function cancelClose(menuId) {
@@ -346,6 +653,7 @@ jQuery(function ($) {
 			$menu.find('.elodin-recently-edited-search-input').first().val(),
 		);
 		$menu.find('.elodin-recently-edited-post-list').scrollTop(0);
+		selectFirstVisibleRow();
 	}
 
 	function saveActiveGroup(menuId) {
@@ -636,6 +944,7 @@ jQuery(function ($) {
 		}
 		cancelClose(menuId);
 		sessionStorage.removeItem(storageKey(menuId));
+		sessionStorage.removeItem(selectionStorageKey(menuId));
 		$('#' + menuId).removeClass('hover elodin-recently-edited-grace-open');
 	}
 
@@ -652,17 +961,31 @@ jQuery(function ($) {
 			var shouldKeepOpen = sessionStorage.getItem(storageKey(menuId));
 			if (shouldKeepOpen === 'true') {
 				var storedGroup = sessionStorage.getItem(groupStorageKey(menuId));
+				var storedSelection = sessionStorage.getItem(selectionStorageKey(menuId));
+				var $menu = $('#' + menuId);
+				if (storedGroup) {
+					$menu.data('restoreGroup', storedGroup);
+				}
+				if (storedSelection) {
+					try {
+						$menu.data('restoreSelection', JSON.parse(storedSelection));
+					} catch (error) {
+						$menu.removeData('restoreSelection');
+					}
+				}
 				// Clear the flag
 				sessionStorage.removeItem(storageKey(menuId));
 				sessionStorage.removeItem(groupStorageKey(menuId));
+				sessionStorage.removeItem(selectionStorageKey(menuId));
 
 				// Add hover class to keep menu open
-				$('#' + menuId).addClass('hover');
+				$menu.addClass('hover');
 				window.setTimeout(function () {
 					if (storedGroup) {
-						switchRelatedGroup($('#' + menuId), storedGroup);
+						switchRelatedGroup($menu, storedGroup);
 					}
 					restoreScrollPosition(menuId);
+					selectStoredVisibleRowOrCurrentOrFirst();
 				}, 0);
 			}
 		});
@@ -686,6 +1009,7 @@ jQuery(function ($) {
 
 		// Set flag to keep menu open after navigation
 		var menuId = getMenuIdFromElement($(this));
+		storeRowSelection(menuId, $(this).closest('.elodin-recently-edited-row'));
 		saveActiveGroup(menuId);
 		saveScrollPosition(menuId);
 		sessionStorage.setItem(storageKey(menuId), 'true');
@@ -768,7 +1092,6 @@ jQuery(function ($) {
 			e.stopPropagation();
 			var $input = $(this);
 			var menuId = getMenuIdFromElement($input);
-			switchRelatedGroup($('#' + menuId), 'all');
 			filterMenuItems($('#' + menuId), $input.val());
 		},
 	);
@@ -784,7 +1107,53 @@ jQuery(function ($) {
 		},
 	);
 
+	$(document).on(
+		'keydown',
+		'.elodin-recently-edited-search-input',
+		function (e) {
+			if (handleMenuNavigationKeydown(e)) {
+				e.preventDefault();
+				e.stopPropagation();
+			}
+		},
+	);
+
 	$(document).on('keydown', function (e) {
+		var isSearchShortcut =
+			e.shiftKey &&
+			!e.altKey &&
+			isKeyboardEventForE(e) &&
+			(isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+		var isCurrentEditShortcut =
+			!e.shiftKey &&
+			e.altKey &&
+			isKeyboardEventForE(e) &&
+			(isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+
+		if (isSearchShortcut) {
+			focusRecentlyEditedSearch();
+			e.preventDefault();
+			e.stopPropagation();
+			return;
+		}
+
+		if (isCurrentEditShortcut && openCurrentToggleUrl()) {
+			e.preventDefault();
+			e.stopPropagation();
+			return;
+		}
+
+		if (
+			getOpenMenu().length &&
+			!$(e.target).is('input, textarea, select') &&
+			!$(e.target).closest('[contenteditable="true"]').length &&
+			handleMenuNavigationKeydown(e)
+		) {
+			e.preventDefault();
+			e.stopPropagation();
+			return;
+		}
+
 		if (e.metaKey || e.ctrlKey || e.altKey) {
 			return;
 		}
@@ -825,9 +1194,10 @@ jQuery(function ($) {
 	 * Initialize menu state on page load
 	 */
 	setScrollbarWidthVariable();
+	updateSearchPlaceholder();
 	checkAndRestoreMenuState();
 	if (!hydrateRecentlyEditedMenuFromCache()) {
-		scheduleSmallSitePreload();
+		scheduleMenuIndexBuild();
 	}
 
 	/**

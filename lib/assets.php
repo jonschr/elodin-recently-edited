@@ -33,6 +33,18 @@ function elodin_recently_edited_enqueue_assets() {
 	$nonce_post_type = wp_create_nonce( 'elodin_recently_edited_post_type' );
 	$nonce_title     = wp_create_nonce( 'elodin_recently_edited_title' );
 	$nonce_slug      = wp_create_nonce( 'elodin_recently_edited_slug' );
+	$current_post_id = function_exists( 'elodin_recently_edited_get_current_post_id' ) ? elodin_recently_edited_get_current_post_id() : 0;
+	$current_post    = $current_post_id ? get_post( $current_post_id ) : null;
+	$current_edit_url = '';
+	$current_view_url = '';
+	if ( $current_post instanceof WP_Post ) {
+		$current_edit_url = function_exists( 'elodin_recently_edited_get_edit_link' )
+			? elodin_recently_edited_get_edit_link( $current_post )
+			: get_edit_post_link( $current_post_id );
+		$current_view_url = function_exists( 'elodin_recently_edited_get_view_link' )
+			? elodin_recently_edited_get_view_link( $current_post )
+			: get_permalink( $current_post_id );
+	}
 
 	// Localize script with AJAX URL and nonces
 	wp_localize_script(
@@ -48,9 +60,12 @@ function elodin_recently_edited_enqueue_assets() {
 			'menuRestUrl'   => esc_url_raw( rest_url( 'elodin-recently-edited/v1/menu' ) ),
 			'restNonce'     => wp_create_nonce( 'wp_rest' ),
 			'currentPostType' => function_exists( 'elodin_recently_edited_get_current_post_type' ) ? elodin_recently_edited_get_current_post_type() : '',
-			'currentPostId'   => function_exists( 'elodin_recently_edited_get_current_post_id' ) ? elodin_recently_edited_get_current_post_id() : 0,
+			'currentPostId'   => $current_post_id,
+			'currentEditUrl'  => $current_edit_url ? esc_url_raw( $current_edit_url ) : '',
+			'currentViewUrl'  => $current_view_url ? esc_url_raw( $current_view_url ) : '',
+			'isAdmin'         => is_admin(),
 			'cacheKey'        => 'elodin_recently_edited_menu_' . md5( home_url() ),
-			'cacheSchema'     => 1,
+			'cacheSchema'     => function_exists( 'elodin_recently_edited_get_client_menu_cache_version' ) ? elodin_recently_edited_get_client_menu_cache_version() : 1,
 		)
 	);
 

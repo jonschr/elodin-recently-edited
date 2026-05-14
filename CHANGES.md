@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0 - 2026-05-13
+- Rebuilt the Recently Edited cache automatically after post saves, deletes, and status transitions, including an immediate background rebuild and browser cache-version bump.
+- Fixed cache invalidation to clear both admin and front-end/REST menu cache variants so newly published or edited posts appear promptly.
+- Changed stale or missing browser indexes to rebuild automatically on page load instead of requiring the Build Initial Index button.
+- Added `Cmd+Shift+E` on Mac and `Ctrl+Shift+E` on Windows/Linux to open Recently Edited, switch to All, and focus the search field.
+- Added platform-aware search placeholder text that advertises the open-search shortcut.
+- Added keyboard navigation for the open menu, including up/down row movement, wrapping left/right content-type navigation, Enter to open, and Cmd/Ctrl+Enter to edit from search.
+- Added `Cmd+Option+E` on Mac and `Ctrl+Alt+E` on Windows/Linux to toggle the current item between front-end view and backend edit screens.
+- Preserved keyboard selection when navigating from the Recently Edited menu so reopened menus resume from the previous row, and added Escape to close the menu instantly.
+
 ## 1.4.2 - 2026-05-12
 - Reworked the admin-bar menu to use an explicit “Build Initial Index” flow with browser-side caching, avoiding repeated index builds across page loads.
 - Added a REST-powered menu index that is cached globally on the server and hydrated from local browser storage when available.

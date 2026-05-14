@@ -364,7 +364,11 @@ function elodin_recently_edited_should_load_admin_bar() {
  *
  * @return string Cache key.
  */
-function elodin_recently_edited_get_global_menu_cache_key() {
+function elodin_recently_edited_get_global_menu_cache_key( $is_admin_context = null ) {
+	if ( null === $is_admin_context ) {
+		$is_admin_context = is_admin();
+	}
+
 	return 'elodin_recently_edited_menu_' . md5(
 		wp_json_encode(
 			array(
@@ -372,12 +376,39 @@ function elodin_recently_edited_get_global_menu_cache_key() {
 				'schema'    => 3,
 				'statuses'  => elodin_recently_edited_get_menu_post_statuses(),
 				'limit'     => elodin_recently_edited_get_menu_item_limit(),
-				'is_admin'  => is_admin(),
+				'is_admin'  => (bool) $is_admin_context,
 				'posttypes' => array_keys( elodin_recently_edited_get_switchable_post_types() ),
 				'gf'        => elodin_recently_edited_is_gravity_forms_available(),
 			)
 		)
 	);
+}
+
+/**
+ * Get the browser-side menu cache version.
+ *
+ * @since 1.4.2
+ *
+ * @return int Cache version.
+ */
+function elodin_recently_edited_get_client_menu_cache_version() {
+	$version = (int) get_option( 'elodin_recently_edited_menu_cache_version', 1 );
+
+	return max( 1, $version );
+}
+
+/**
+ * Bump the browser-side menu cache version.
+ *
+ * @since 1.4.2
+ *
+ * @return int Updated cache version.
+ */
+function elodin_recently_edited_bump_client_menu_cache_version() {
+	$version = elodin_recently_edited_get_client_menu_cache_version() + 1;
+	update_option( 'elodin_recently_edited_menu_cache_version', $version, false );
+
+	return $version;
 }
 
 /**
@@ -485,7 +516,65 @@ function elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_pos
  * @return void
  */
 function elodin_recently_edited_clear_menu_cache() {
-	delete_transient( elodin_recently_edited_get_global_menu_cache_key() );
+	delete_transient( elodin_recently_edited_get_global_menu_cache_key( true ) );
+	delete_transient( elodin_recently_edited_get_global_menu_cache_key( false ) );
+	elodin_recently_edited_bump_client_menu_cache_version();
+	elodin_recently_edited_schedule_menu_cache_rebuild();
+}
+
+/**
+ * Schedule an immediate background rebuild of rendered menu fragments.
+ *
+ * @since 1.4.2
+ *
+ * @return void
+ */
+function elodin_recently_edited_schedule_menu_cache_rebuild() {
+	$args = array( get_current_user_id() );
+	if ( wp_next_scheduled( 'elodin_recently_edited_rebuild_menu_cache', $args ) ) {
+		return;
+	}
+
+	wp_schedule_single_event(
+		time(),
+		'elodin_recently_edited_rebuild_menu_cache',
+		$args
+	);
+
+	if ( function_exists( 'spawn_cron' ) ) {
+		spawn_cron( time() );
+	}
+}
+
+/**
+ * Rebuild rendered menu fragments in the background.
+ *
+ * @since 1.4.2
+ *
+ * @param int $user_id User ID whose capabilities should be used for rendering.
+ * @return void
+ */
+function elodin_recently_edited_rebuild_menu_cache( $user_id = 0 ) {
+	$user_id = intval( $user_id );
+	if ( $user_id > 0 ) {
+		wp_set_current_user( $user_id );
+	}
+
+	if ( ! is_user_logged_in() || ! elodin_recently_edited_runtime_enabled() ) {
+		return;
+	}
+
+	if ( ! class_exists( 'WP_Admin_Bar' ) ) {
+		require_once ABSPATH . WPINC . '/class-wp-admin-bar.php';
+	}
+
+	$wp_admin_bar       = new WP_Admin_Bar();
+	$previous_rendering = ! empty( $GLOBALS['elodin_recently_edited_render_full_menu'] );
+
+	show_admin_bar( true );
+	$GLOBALS['elodin_recently_edited_render_full_menu'] = true;
+	elodin_recently_edited_admin_bar( $wp_admin_bar );
+	$GLOBALS['elodin_recently_edited_render_full_menu'] = $previous_rendering;
 }
 
 /**
@@ -1723,6 +1812,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 add_action( 'save_post', 'elodin_recently_edited_clear_menu_cache_on_content_change' );
 add_action( 'deleted_post', 'elodin_recently_edited_clear_menu_cache_on_content_change' );
 add_action( 'transition_post_status', 'elodin_recently_edited_clear_menu_cache_on_content_change' );
+add_action( 'elodin_recently_edited_rebuild_menu_cache', 'elodin_recently_edited_rebuild_menu_cache' );
 
 /**
  * Register REST endpoint for lazy-loaded menu contents.

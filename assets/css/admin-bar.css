@@ -566,6 +566,12 @@
 		contain-intrinsic-size: 26px;
 	}
 
+	.elodin-recently-edited-list-item.is-keyboard-selected {
+		background: rgba(244, 197, 66, 0.16);
+		outline: 1px solid rgba(244, 197, 66, 0.55);
+		outline-offset: -1px;
+	}
+
 	.elodin-related-pill-band {
 		display: flex !important;
 		flex-wrap: wrap !important;
