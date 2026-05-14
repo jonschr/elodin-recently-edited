@@ -503,9 +503,67 @@ function elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_pos
 			);
 			$cached_menu['post_list_rows'][ $index ] = $row;
 		}
+
+		$cached_menu['post_list_rows'] = elodin_recently_edited_sort_cached_rows_by_pins( $cached_menu['post_list_rows'], $pinned_ids );
 	}
 
 	return $cached_menu;
+}
+
+/**
+ * Sort cached row fragments so pinned rows appear first.
+ *
+ * Pinned rows are sorted by modified date descending, while unpinned rows keep
+ * their existing cache order.
+ *
+ * @since 1.5.0
+ *
+ * @param array $rows Cached row HTML fragments.
+ * @param array $pinned_ids Pinned post IDs keyed by ID.
+ * @return array Sorted row HTML fragments.
+ */
+function elodin_recently_edited_sort_cached_rows_by_pins( $rows, $pinned_ids ) {
+	if ( empty( $rows ) || ! is_array( $rows ) || empty( $pinned_ids ) ) {
+		return $rows;
+	}
+
+	$indexed_rows = array();
+	foreach ( $rows as $index => $row ) {
+		$post_id  = 0;
+		$modified = 0;
+
+		if ( preg_match( '/data-post-id="(\d+)"/', (string) $row, $matches ) ) {
+			$post_id = intval( $matches[1] );
+		}
+
+		if ( preg_match( '/data-modified="(\d+)"/', (string) $row, $matches ) ) {
+			$modified = intval( $matches[1] );
+		}
+
+		$indexed_rows[] = array(
+			'html'     => $row,
+			'index'    => $index,
+			'modified' => $modified,
+			'pinned'   => $post_id && isset( $pinned_ids[ $post_id ] ),
+		);
+	}
+
+	usort(
+		$indexed_rows,
+		function ( $a, $b ) {
+			if ( $a['pinned'] !== $b['pinned'] ) {
+				return $a['pinned'] ? -1 : 1;
+			}
+
+			if ( $a['pinned'] && $a['modified'] !== $b['modified'] ) {
+				return $a['modified'] > $b['modified'] ? -1 : 1;
+			}
+
+			return $a['index'] <=> $b['index'];
+		}
+	);
+
+	return wp_list_pluck( $indexed_rows, 'html' );
 }
 
 /**
@@ -764,6 +822,57 @@ function elodin_recently_edited_get_post_type_admin_url( $post_type ) {
 }
 
 /**
+ * Get the toolbar markup shown at the top of the Recently Edited menu.
+ *
+ * @since 1.5.0
+ *
+ * @return string Toolbar HTML.
+ */
+function elodin_recently_edited_get_search_toolbar_html() {
+	$toolbar_links = '';
+	if ( current_user_can( 'manage_options' ) ) {
+		$toolbar_links = '<a class="elodin-recently-edited-toolbar-link" href="' . esc_url( admin_url( 'options-general.php?page=elodin-recently-edited-settings' ) ) . '">' . esc_html__( 'Settings', 'elodin-recently-edited' ) . '</a>'
+			. '<a class="elodin-recently-edited-toolbar-link elodin-recently-edited-cache-refresh" href="#">' . esc_html__( 'Rebuild cache', 'elodin-recently-edited' ) . '</a>';
+	}
+
+	return '<div class="elodin-recently-edited-toolbar">'
+		. '<div class="elodin-recently-edited-search"><input class="elodin-recently-edited-search-input" type="search" name="elodin_recently_edited_search" placeholder="' . esc_attr__( 'Search this site\'s content...', 'elodin-recently-edited' ) . '" aria-label="' . esc_attr__( 'Search this site\'s content', 'elodin-recently-edited' ) . '" /></div>'
+		. '<div class="elodin-recently-edited-toolbar-links">' . $toolbar_links . '</div>'
+		. '</div>';
+}
+
+/**
+ * Get post types that are supported by the related switcher.
+ *
+ * @since 1.5.0
+ *
+ * @return array<string,WP_Post_Type> Post type objects keyed by slug.
+ */
+function elodin_recently_edited_get_available_switchable_post_types() {
+	static $available = null;
+
+	if ( null !== $available ) {
+		return $available;
+	}
+
+	$post_types = get_post_types( array( 'show_ui' => true ), 'objects' );
+	$available  = array();
+
+	foreach ( $post_types as $pt_slug => $pt_obj ) {
+		if (
+			function_exists( 'elodin_recently_edited_is_excluded_content_type' )
+			&& elodin_recently_edited_is_excluded_content_type( $pt_slug, $pt_obj )
+		) {
+			continue;
+		}
+
+		$available[ $pt_slug ] = $pt_obj;
+	}
+
+	return $available;
+}
+
+/**
  * Get post types that can appear in the related switcher.
  *
  * @since 1.3.0
@@ -777,15 +886,16 @@ function elodin_recently_edited_get_switchable_post_types() {
 		return $available;
 	}
 
-	$post_types = get_post_types( array( 'show_ui' => true ), 'objects' );
-	$available  = array();
+	$post_types         = elodin_recently_edited_get_available_switchable_post_types();
+	$enabled_post_types = function_exists( 'elodin_recently_edited_get_enabled_post_types' )
+		? elodin_recently_edited_get_enabled_post_types()
+		: array_keys( $post_types );
+	$available          = array();
 
 	foreach ( $post_types as $pt_slug => $pt_obj ) {
-		if ( 'attachment' === $pt_slug ) {
-			continue;
+		if ( in_array( $pt_slug, $enabled_post_types, true ) ) {
+			$available[ $pt_slug ] = $pt_obj;
 		}
-
-		$available[ $pt_slug ] = $pt_obj;
 	}
 
 	return $available;
@@ -1053,7 +1163,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 		$row_class .= ' elodin-recently-edited-row--current';
 	}
 
-	return '<span class="' . esc_attr( $row_class ) . '" data-related-group="' . esc_attr( $group ) . '" data-post-type="' . esc_attr( $post->post_type ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
+	return '<span class="' . esc_attr( $row_class ) . '" data-related-group="' . esc_attr( $group ) . '" data-post-type="' . esc_attr( $post->post_type ) . '" data-modified="' . intval( $modified_raw ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
 		. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="' . esc_attr__( 'Pin', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
 		. '<span class="elodin-recently-edited-title">'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '"' . $title_new_tab_attr . ' data-resource-type="post" data-resource-id="' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '">' . $title . '</span>'
@@ -1393,7 +1503,7 @@ function elodin_recently_edited_add_cached_admin_bar_menu( $wp_admin_bar, $menu_
 		array(
 			'id'     => $menu_id . '-search',
 			'parent' => $menu_id,
-			'title'  => '<div class="elodin-recently-edited-search"><input class="elodin-recently-edited-search-input" type="search" name="elodin_recently_edited_search" placeholder="' . esc_attr__( 'Search recently edited...', 'elodin-recently-edited' ) . '" aria-label="' . esc_attr__( 'Search recently edited...', 'elodin-recently-edited' ) . '" /></div>',
+			'title'  => elodin_recently_edited_get_search_toolbar_html(),
 			'href'   => false,
 			'meta'   => array( 'class' => 'elodin-recently-edited-search-item' ),
 		)
@@ -1467,7 +1577,7 @@ function elodin_recently_edited_add_lazy_admin_bar_shell( $wp_admin_bar, $menu_i
 			'href'     => '#',
 			'parent'   => 'top-secondary',
 			'position' => 999,
-			'meta'     => array( 'class' => 'elodin-recently-edited-combined-menu elodin-related-menu elodin-recently-edited-is-lazy' ),
+			'meta'     => array( 'class' => 'elodin-recently-edited-combined-menu elodin-related-menu elodin-recently-edited-is-lazy elodin-recently-edited-shell-pending' ),
 		)
 	);
 
@@ -1644,7 +1754,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		array(
 			'id'     => $menu_id . '-search',
 			'parent' => $menu_id,
-			'title'  => '<div class="elodin-recently-edited-search"><input class="elodin-recently-edited-search-input" type="search" name="elodin_recently_edited_search" placeholder="' . esc_attr__( 'Search recently edited...', 'elodin-recently-edited' ) . '" aria-label="' . esc_attr__( 'Search recently edited...', 'elodin-recently-edited' ) . '" /></div>',
+			'title'  => elodin_recently_edited_get_search_toolbar_html(),
 			'href'   => false,
 			'meta'   => array( 'class' => 'elodin-recently-edited-search-item' ),
 		)

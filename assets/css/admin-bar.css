@@ -1,9 +1,11 @@
 #wp-admin-bar-recently-edited {
+	--elodin-recently-edited-menu-width: 860px;
 	--elodin-recently-edited-columns: 18px minmax(220px, 280px) minmax(140px, 180px) 34px 58px 72px 46px 46px 42px;
 
 	.ab-submenu {
-		min-width: 860px;
-		width: auto !important;
+		min-width: var(--elodin-recently-edited-menu-width);
+		width: var(--elodin-recently-edited-menu-width) !important;
+		max-width: calc(100vw - 16px);
 		height: auto !important;
 		max-height: none !important;
 		overflow: visible !important;
@@ -31,26 +33,107 @@
 		white-space: normal !important;
 	}
 
-	.elodin-recently-edited-search-input {
+	.elodin-recently-edited-toolbar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		width: 100%;
+		min-height: 30px;
 		box-sizing: border-box;
-		background: rgba(255, 255, 255, 0.08);
-		border: 1px solid rgba(255, 255, 255, 0.25);
+	}
+
+	.elodin-recently-edited-search {
+		flex: 1 1 auto;
+		min-width: 0;
+		max-width: calc(100% - 176px);
+	}
+
+	.elodin-recently-edited-search-input {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 100%;
+		height: 30px !important;
+		min-height: 30px !important;
+		box-sizing: border-box;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.055)),
+			rgba(10, 14, 18, 0.42);
+		border: 1px solid rgba(255, 255, 255, 0.2);
 		border-radius: 4px;
-		padding: 4px 6px;
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.08),
+			0 1px 1px rgba(0, 0, 0, 0.16);
+		padding: 5px 9px !important;
 		color: #fff;
-		font-size: 12px;
-		line-height: 1.3;
+		font-size: 12px !important;
+		font-weight: 400 !important;
+		line-height: 18px !important;
+		transition:
+			background 140ms ease,
+			border-color 140ms ease,
+			box-shadow 140ms ease;
 	}
 
 	.elodin-recently-edited-search-input::placeholder {
-		color: rgba(255, 255, 255, 0.6);
+		color: rgba(255, 255, 255, 0.52);
 	}
 
 	.elodin-recently-edited-search-input:focus {
 		outline: none;
-		border-color: rgba(255, 255, 255, 0.45);
-		background: rgba(255, 255, 255, 0.12);
+		border-color: rgba(244, 197, 66, 0.48);
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.075)),
+			rgba(13, 18, 23, 0.56);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.1),
+			0 0 0 2px rgba(244, 197, 66, 0.12),
+			0 1px 2px rgba(0, 0, 0, 0.2);
+	}
+
+	.elodin-recently-edited-search-input::-webkit-search-decoration,
+	.elodin-recently-edited-search-input::-webkit-search-cancel-button,
+	.elodin-recently-edited-search-input::-webkit-search-results-button,
+	.elodin-recently-edited-search-input::-webkit-search-results-decoration {
+		-webkit-appearance: none;
+	}
+
+	.elodin-recently-edited-toolbar-links {
+		flex: 0 0 auto;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 10px;
+		min-width: 158px;
+	}
+
+	.elodin-recently-edited-toolbar-link {
+		display: inline !important;
+		height: auto !important;
+		min-height: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		border-radius: 0 !important;
+		background: transparent !important;
+		color: rgba(255, 255, 255, 0.58) !important;
+		font-size: 12px !important;
+		font-weight: inherit !important;
+		line-height: 1.2 !important;
+		text-decoration: underline !important;
+		text-underline-offset: 2px;
+		white-space: nowrap;
+	}
+
+	.elodin-recently-edited-toolbar-link:hover,
+	.elodin-recently-edited-toolbar-link:focus {
+		background: transparent !important;
+		color: #fff !important;
+		outline: none !important;
+		text-decoration-thickness: 2px;
+	}
+
+	.elodin-recently-edited-toolbar-link[aria-disabled="true"] {
+		cursor: wait;
+		opacity: 0.7;
 	}
 
 	.elodin-recently-edited-no-matches {
@@ -74,6 +157,7 @@
 		align-items: center;
 		column-gap: 4px;
 		width: 100%;
+		min-height: 30px;
 	}
 
 	.elodin-recently-edited-row--not-published {
@@ -96,8 +180,7 @@
 	.elodin-recently-edited-row--current .elodin-recently-edited-post-type-label,
 	.elodin-recently-edited-row--current .elodin-recently-edited-published,
 	.elodin-recently-edited-row--current .elodin-recently-edited-modified,
-	.elodin-recently-edited-row--current .elodin-recently-edited-id,
-	.elodin-recently-edited-row--current .elodin-recently-edited-pin {
+	.elodin-recently-edited-row--current .elodin-recently-edited-id {
 		color: #f4c542 !important;
 	}
 
@@ -106,8 +189,7 @@
 	.elodin-recently-edited-row--current .elodin-recently-edited-status-select:hover,
 	.elodin-recently-edited-row--current .elodin-recently-edited-status-select:focus,
 	.elodin-recently-edited-row--current .elodin-recently-edited-post-type-select:hover,
-	.elodin-recently-edited-row--current .elodin-recently-edited-post-type-select:focus,
-	.elodin-recently-edited-row--current .elodin-recently-edited-pin:hover {
+	.elodin-recently-edited-row--current .elodin-recently-edited-post-type-select:focus {
 		color: #f4c542 !important;
 	}
 
@@ -342,10 +424,93 @@
 	}
 }
 
+#wpadminbar #wp-admin-bar-recently-edited > .ab-item {
+	padding-right: calc(8px + var(--elodin-page-scrollbar-compensation, 0px)) !important;
+}
+
 #wp-admin-bar-recently-edited .ab-submenu {
-	min-width: 860px !important;
-	width: auto !important;
+	min-width: var(--elodin-recently-edited-menu-width) !important;
+	width: var(--elodin-recently-edited-menu-width) !important;
+	max-width: calc(100vw - 16px) !important;
 	box-sizing: border-box;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .ab-sub-wrapper {
+	width: var(--elodin-recently-edited-menu-width) !important;
+	max-width: calc(100vw - 16px) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited,
+#wpadminbar #wp-admin-bar-recently-edited *,
+#wpadminbar #wp-admin-bar-recently-edited *::before,
+#wpadminbar #wp-admin-bar-recently-edited *::after {
+	box-sizing: border-box !important;
+	font-family: inherit !important;
+	letter-spacing: 0 !important;
+	text-shadow: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .ab-sub-wrapper,
+#wpadminbar #wp-admin-bar-recently-edited .ab-submenu {
+	background: #1d2327 !important;
+	border: 0 !important;
+	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32) !important;
+	color: #fff !important;
+	font-size: 12px !important;
+	line-height: 1.3 !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited li,
+#wpadminbar #wp-admin-bar-recently-edited .ab-item {
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	color: inherit !important;
+	font-size: inherit !important;
+	font-weight: inherit !important;
+	line-height: inherit !important;
+	margin: 0 !important;
+	text-decoration: none !important;
+	text-transform: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited input,
+#wpadminbar #wp-admin-bar-recently-edited select,
+#wpadminbar #wp-admin-bar-recently-edited button {
+	min-height: 0 !important;
+	box-shadow: none !important;
+	font-family: inherit !important;
+	font-size: 12px !important;
+	font-weight: inherit !important;
+	letter-spacing: 0 !important;
+	line-height: 1.3 !important;
+	margin: 0 !important;
+	max-width: none !important;
+	text-transform: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-row,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-column-header {
+	display: grid !important;
+	grid-template-columns: var(--elodin-recently-edited-columns) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-title-link,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-action,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-slug-text {
+	border: 0 !important;
+	box-shadow: none !important;
+	font-family: inherit !important;
+	font-weight: inherit !important;
+	line-height: 16px !important;
+	text-decoration: none !important;
+	text-transform: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-title-link:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-action:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-slug-text:hover {
+	text-decoration: underline !important;
 }
 
 #wp-admin-bar-recently-edited .elodin-recently-edited-menu-star {
@@ -358,8 +523,17 @@
 	display: block !important;
 }
 
+#wpadminbar #wp-admin-bar-recently-edited.elodin-recently-edited-force-closed > .ab-sub-wrapper {
+	display: none !important;
+}
+
 #wp-admin-bar-recently-edited > .ab-item:hover,
 #wp-admin-bar-recently-edited > .ab-item:focus {
+	color: #fff !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited > .ab-item,
+#wpadminbar #wp-admin-bar-recently-edited > .ab-item .ab-label {
 	color: #fff !important;
 }
 
@@ -369,6 +543,10 @@
 	}
 
 	.elodin-recently-edited-shell-hidden {
+		display: none !important;
+	}
+
+	&.elodin-recently-edited-shell-pending .elodin-recently-edited-shell-item {
 		display: none !important;
 	}
 
@@ -530,12 +708,14 @@
 	}
 
 	.elodin-recently-edited-post-list {
+		width: 100%;
 		max-height: 320px;
-		overflow-y: auto;
+		overflow-y: scroll;
 		overflow-x: hidden;
 		padding: 0 0 6px;
 		box-sizing: border-box;
 		contain: content;
+		scrollbar-gutter: stable;
 		scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
 		scrollbar-width: thin;
 	}
@@ -559,74 +739,84 @@
 
 	.elodin-recently-edited-list-item {
 		box-sizing: border-box;
-		min-height: 26px;
+		min-height: 30px;
 		padding: 0 8px;
 		contain: layout paint style;
 		content-visibility: auto;
-		contain-intrinsic-size: 26px;
+		contain-intrinsic-size: 30px;
 	}
 
 	.elodin-recently-edited-list-item.is-keyboard-selected {
 		background: rgba(244, 197, 66, 0.16);
-		outline: 1px solid rgba(244, 197, 66, 0.55);
-		outline-offset: -1px;
 	}
 
 	.elodin-related-pill-band {
 		display: flex !important;
 		flex-wrap: wrap !important;
-		gap: 4px !important;
+		gap: 6px !important;
 		padding: 8px !important;
 		margin: 0 !important;
-		background: rgba(0, 0, 0, 0.18) !important;
-		border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(0, 0, 0, 0.12)) !important;
+		border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+		border-bottom: 1px solid rgba(0, 0, 0, 0.32) !important;
 	}
 
 	.elodin-related-pill {
+		position: relative !important;
 		display: inline-flex !important;
 		align-items: center !important;
 		gap: 6px !important;
-		padding: 2px 8px !important;
-		border-radius: 5px !important;
-		border: 1px solid rgba(255, 255, 255, 0.35) !important;
-		background: rgba(255, 255, 255, 0.08) !important;
-		color: rgba(255, 255, 255, 0.85) !important;
+		min-height: 26px !important;
+		height: 26px !important;
+		padding: 4px 9px !important;
+		border-radius: 4px !important;
+		border: 1px solid rgba(255, 255, 255, 0.16) !important;
+		background: rgba(255, 255, 255, 0.045) !important;
+		color: rgba(255, 255, 255, 0.76) !important;
 		font-size: 12px !important;
-		line-height: 1.2 !important;
+		font-weight: inherit !important;
+		line-height: 1 !important;
 		text-decoration: none !important;
-		height: auto !important;
 		min-width: 0 !important;
 		white-space: nowrap !important;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055) !important;
+		transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease !important;
 	}
 
-	.elodin-related-pill:hover {
-		background: rgba(255, 255, 255, 0.18) !important;
-		border-color: rgba(255, 255, 255, 0.55) !important;
-		text-decoration: none !important;
-	}
-
-	.elodin-related-pill.is-current:not(.is-active) {
-		border-color: rgba(244, 197, 66, 0.45) !important;
+	.elodin-related-pill:hover,
+	.elodin-related-pill:focus {
+		background: rgba(255, 255, 255, 0.1) !important;
+		border-color: rgba(255, 255, 255, 0.28) !important;
 		color: #fff !important;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 4px rgba(0, 0, 0, 0.16) !important;
+		outline: none !important;
+		text-decoration: none !important;
 	}
 
 	.elodin-related-pill.is-active {
-		background: rgba(244, 197, 66, 0.18) !important;
-		border-color: rgba(244, 197, 66, 0.7) !important;
+		background: rgba(244, 197, 66, 0.2) !important;
+		border-color: rgba(244, 197, 66, 0.72) !important;
 		color: #fff !important;
-		font-weight: 400 !important;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(244, 197, 66, 0.08), 0 1px 6px rgba(0, 0, 0, 0.22) !important;
 	}
 
 	.elodin-related-pill-count {
 		display: inline-flex;
 		align-items: center;
-		padding: 0 4px;
-		border-radius: 10px;
-		background: rgba(255, 255, 255, 0.18);
-		color: rgba(255, 255, 255, 0.8);
+		justify-content: center;
+		min-width: 18px;
+		padding: 2px 5px;
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.13);
+		color: rgba(255, 255, 255, 0.78);
 		font-size: 10px;
-		line-height: 1.2;
+		font-weight: 600;
+		line-height: 1;
+	}
+
+	.elodin-related-pill.is-active .elodin-related-pill-count {
+		background: rgba(244, 197, 66, 0.24);
+		color: #fff;
 	}
 
 	.elodin-related-pill-item + li {

@@ -9,7 +9,10 @@ jQuery(function ($) {
 	var menuIds = ['wp-admin-bar-recently-edited'];
 	var closeDelayMs = 2000;
 	var closeTimers = {};
+	var forceClosedMenus = {};
 	var menuLoadRequest = null;
+	var shellRevealTimer = null;
+	var shellRevealDelayMs = 700;
 	var rowIndex = null;
 	var isMac = /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || '');
 
@@ -29,6 +32,18 @@ jQuery(function ($) {
 		return 'elodin_recently_edited_selected_row';
 	}
 
+	function searchStorageKey(menuId) {
+		return 'elodin_recently_edited_search_query';
+	}
+
+	function stateStorageKey(menuId) {
+		return 'elodin_recently_edited_menu_state';
+	}
+
+	function targetUrlStorageKey(menuId) {
+		return 'elodin_recently_edited_target_url';
+	}
+
 	function normalizeSearchText(value) {
 		return (value || '').toString().toLowerCase().trim();
 	}
@@ -44,11 +59,33 @@ jQuery(function ($) {
 	function updateSearchPlaceholder() {
 		$('.elodin-recently-edited-search-input').attr(
 			'placeholder',
-			'Search recently edited... (' + getSearchShortcutLabel() + ')',
+			'Search this site\'s content... (' + getSearchShortcutLabel() + ')',
 		);
 	}
 
-	function setScrollbarWidthVariable() {
+	function updateCurrentRowHighlight($menu) {
+		var currentPostId = parseInt(ElodinRecentlyEdited.currentPostId || 0, 10);
+		$menu
+			.find('.elodin-recently-edited-row--current')
+			.removeClass('elodin-recently-edited-row--current');
+
+		if (!currentPostId) {
+			return;
+		}
+
+		$menu
+			.find('.elodin-recently-edited-row')
+			.filter(function () {
+				return (
+					$(this)
+						.find('[data-post-id="' + currentPostId + '"]')
+						.length > 0
+				);
+			})
+			.addClass('elodin-recently-edited-row--current');
+	}
+
+	function getScrollbarWidth() {
 		var probe = $('<div>')
 			.css({
 				height: '100px',
@@ -62,9 +99,34 @@ jQuery(function ($) {
 		var scrollbarWidth = probe[0].offsetWidth - probe[0].clientWidth;
 		probe.remove();
 
+		return scrollbarWidth;
+	}
+
+	function setScrollbarWidthVariable() {
+		var scrollbarWidth = getScrollbarWidth();
+
 		$('#wp-admin-bar-recently-edited').css(
 			'--elodin-scrollbar-width',
 			scrollbarWidth + 'px',
+		);
+	}
+
+	function setPageScrollbarCompensation() {
+		var root = document.documentElement;
+		var body = document.body;
+		var pageHeight = Math.max(
+			root.scrollHeight,
+			body ? body.scrollHeight : 0,
+			root.offsetHeight,
+			body ? body.offsetHeight : 0,
+		);
+		var hasPageScrollbar = pageHeight > window.innerHeight;
+		var scrollbarWidth = getScrollbarWidth();
+		var compensation = hasPageScrollbar ? 0 : scrollbarWidth;
+
+		$('#wp-admin-bar-recently-edited').css(
+			'--elodin-page-scrollbar-compensation',
+			compensation + 'px',
 		);
 	}
 
@@ -142,6 +204,7 @@ jQuery(function ($) {
 		replaceAdminBarNode('recently-edited-post-list', nodes.postList.title);
 		invalidateRowIndex();
 		updateSearchPlaceholder();
+		updateCurrentRowHighlight($menu);
 
 		$menu
 			.find('.elodin-recently-edited-shell-hidden')
@@ -150,16 +213,29 @@ jQuery(function ($) {
 			.find('.elodin-recently-edited-shell-item')
 			.removeClass('elodin-recently-edited-shell-item');
 
-		$menu.removeClass('elodin-recently-edited-is-lazy');
+		if (shellRevealTimer) {
+			window.clearTimeout(shellRevealTimer);
+			shellRevealTimer = null;
+		}
+		$menu.removeClass(
+			'elodin-recently-edited-is-lazy elodin-recently-edited-shell-pending',
+		);
 		setScrollbarWidthVariable();
+		setPageScrollbarCompensation();
 
 		var storedGroup =
 			sessionStorage.getItem(groupStorageKey($menu.attr('id'))) ||
 			$menu.data('restoreGroup');
+		var storedSearch = $menu.data('restoreSearch');
 		if (storedGroup) {
 			switchRelatedGroup($menu, storedGroup);
 		}
 		$menu.removeData('restoreGroup');
+		if (typeof storedSearch === 'string' && storedSearch !== '') {
+			$menu.find('.elodin-recently-edited-search-input').first().val(storedSearch);
+			filterMenuItems($menu, storedSearch, { skipSelection: true });
+		}
+		$menu.removeData('restoreSearch');
 		restoreScrollPosition($menu.attr('id'));
 		selectStoredVisibleRowOrCurrentOrFirst();
 
@@ -175,11 +251,32 @@ jQuery(function ($) {
 		return hydrateRecentlyEditedMenu(cached.nodes);
 	}
 
+	function revealLazyShellIfStillNeeded() {
+		var $menu = $('#wp-admin-bar-recently-edited');
+		if (!$menu.length || !$menu.hasClass('elodin-recently-edited-is-lazy')) {
+			return;
+		}
+
+		$menu.removeClass('elodin-recently-edited-shell-pending');
+	}
+
+	function scheduleLazyShellReveal(delay) {
+		if (shellRevealTimer) {
+			window.clearTimeout(shellRevealTimer);
+		}
+
+		shellRevealTimer = window.setTimeout(function () {
+			shellRevealTimer = null;
+			revealLazyShellIfStillNeeded();
+		}, delay);
+	}
+
 	function scheduleMenuIndexBuild() {
 		if (hydrateRecentlyEditedMenuFromCache()) {
 			return;
 		}
 
+		scheduleLazyShellReveal(shellRevealDelayMs);
 		window.setTimeout(function () {
 			loadRecentlyEditedMenu();
 		}, 0);
@@ -231,7 +328,10 @@ jQuery(function ($) {
 	function loadRecentlyEditedMenu(options) {
 		options = options || {};
 		var $menu = $('#wp-admin-bar-recently-edited');
-		if (!$menu.length || !$menu.hasClass('elodin-recently-edited-is-lazy')) {
+		if (
+			!$menu.length ||
+			(!$menu.hasClass('elodin-recently-edited-is-lazy') && !options.force)
+		) {
 			return null;
 		}
 
@@ -253,6 +353,7 @@ jQuery(function ($) {
 		})
 			.done(function (response) {
 				if (response && response.skipped) {
+					revealLazyShellIfStillNeeded();
 					menuLoadRequest = null;
 					return;
 				}
@@ -266,6 +367,7 @@ jQuery(function ($) {
 				hydrateRecentlyEditedMenu(nodes);
 			})
 			.fail(function () {
+				revealLazyShellIfStillNeeded();
 				replaceAdminBarNode(
 					'recently-edited-post-list',
 					'<div class="elodin-recently-edited-post-list"><div class="elodin-recently-edited-loading">Unable to load recently edited content.</div></div>',
@@ -278,7 +380,44 @@ jQuery(function ($) {
 		return menuLoadRequest;
 	}
 
-	function filterMenuItems($menu, query) {
+	function rebuildRecentlyEditedCache($link) {
+		var originalText = $link.text();
+
+		$link.text('Rebuilding...').attr('aria-disabled', 'true');
+
+		$.ajax({
+			url: ElodinRecentlyEdited.ajaxUrl,
+			method: 'POST',
+			data: {
+				action: 'elodin_recently_edited_flush_menu_cache',
+				nonce: ElodinRecentlyEdited.nonceCache,
+			},
+		})
+			.done(function (response) {
+				if (response && response.success && response.data) {
+					if (response.data.cacheSchema) {
+						ElodinRecentlyEdited.cacheSchema = response.data.cacheSchema;
+					}
+					clearClientMenuCache();
+					loadRecentlyEditedMenu({ preload: true, force: true });
+					$link.text(response.data.message || 'Cache rebuilt.');
+					return;
+				}
+
+				$link.text('Unable to rebuild.');
+			})
+			.fail(function () {
+				$link.text('Unable to rebuild.');
+			})
+			.always(function () {
+				window.setTimeout(function () {
+					$link.text(originalText).removeAttr('aria-disabled');
+				}, 1800);
+			});
+	}
+
+	function filterMenuItems($menu, query, options) {
+		options = options || {};
 		var normalized = normalizeSearchText(query);
 		var matchCount = 0;
 		var activeGroup = getActiveGroup($menu);
@@ -305,7 +444,9 @@ jQuery(function ($) {
 			$noMatchesItem.toggle(matchCount === 0);
 		}
 
-		selectFirstVisibleRow();
+		if (!options.skipSelection) {
+			selectFirstVisibleRow();
+		}
 	}
 
 	function getOpenMenu() {
@@ -321,6 +462,38 @@ jQuery(function ($) {
 		});
 	}
 
+	function sortRowsByPinnedState() {
+		var $list = $('#wp-admin-bar-recently-edited .elodin-recently-edited-post-list').first();
+		if (!$list.length) {
+			return;
+		}
+
+		var rows = $list.children('.elodin-recently-edited-list-item').get();
+		rows.sort(function (a, b) {
+			var $a = $(a);
+			var $b = $(b);
+			var aPinned = $a.find('.elodin-recently-edited-pin.is-pinned').length > 0;
+			var bPinned = $b.find('.elodin-recently-edited-pin.is-pinned').length > 0;
+
+			if (aPinned !== bPinned) {
+				return aPinned ? -1 : 1;
+			}
+
+			if (aPinned) {
+				var aModified = parseInt($a.find('.elodin-recently-edited-row').attr('data-modified') || 0, 10);
+				var bModified = parseInt($b.find('.elodin-recently-edited-row').attr('data-modified') || 0, 10);
+				if (aModified !== bModified) {
+					return aModified > bModified ? -1 : 1;
+				}
+			}
+
+			return 0;
+		});
+
+		$list.append(rows);
+		invalidateRowIndex();
+	}
+
 	function setSelectedIndexedRow(indexedRow) {
 		var $menu = $('#wp-admin-bar-recently-edited');
 		$menu
@@ -328,10 +501,15 @@ jQuery(function ($) {
 			.removeClass('is-keyboard-selected');
 
 		if (!indexedRow || !indexedRow.item) {
+			sessionStorage.removeItem(selectionStorageKey($menu.attr('id')));
 			return;
 		}
 
 		indexedRow.item.classList.add('is-keyboard-selected');
+		storeRowSelection($menu.attr('id'), $(indexedRow.row));
+		if ($menu.hasClass('hover')) {
+			sessionStorage.setItem(storageKey($menu.attr('id')), 'true');
+		}
 		indexedRow.item.scrollIntoView({ block: 'nearest' });
 	}
 
@@ -360,13 +538,43 @@ jQuery(function ($) {
 		setSelectedIndexedRow(currentRow || getVisibleIndexedRows()[0]);
 	}
 
+	function getCurrentVisibleRow() {
+		var currentPostId = parseInt(ElodinRecentlyEdited.currentPostId || 0, 10);
+
+		return getVisibleIndexedRows().find(function (indexedRow) {
+			if (indexedRow.row.classList.contains('elodin-recently-edited-row--current')) {
+				return true;
+			}
+
+			if (!currentPostId) {
+				return false;
+			}
+
+			return (
+				$(indexedRow.row)
+					.find('[data-post-id="' + currentPostId + '"]')
+					.length > 0
+			);
+		});
+	}
+
 	function getRowSelectionData($row) {
 		var $resource = $row.find('[data-resource-type][data-resource-id]').first();
 		if ($resource.length) {
+			var visibleIndex = getVisibleIndexedRows().findIndex(function (indexedRow) {
+				return indexedRow.row === $row[0];
+			});
+			var $viewTarget = $row.find('.elodin-recently-edited-title-link').first();
+			var $editTarget = $row.find('.elodin-recently-edited-edit').first();
+
 			return {
+				editUrl: String($editTarget.data('url') || ''),
 				group: $row.attr('data-post-type') || $row.attr('data-related-group') || 'all',
 				resourceId: String($resource.data('resourceId') || ''),
 				resourceType: String($resource.data('resourceType') || ''),
+				searchText: String($row.attr('data-search-text') || ''),
+				viewUrl: String($viewTarget.data('url') || ''),
+				visibleIndex: visibleIndex,
 			};
 		}
 
@@ -383,12 +591,84 @@ jQuery(function ($) {
 		sessionStorage.setItem(selectionStorageKey(menuId), JSON.stringify(selection));
 	}
 
+	function normalizeUrlForSelection(url) {
+		if (!url) {
+			return '';
+		}
+
+		var anchor = document.createElement('a');
+		anchor.href = url;
+
+		return anchor.origin + anchor.pathname.replace(/\/$/, '') + anchor.search;
+	}
+
+	function getSelectedRowSelection(menuId) {
+		var $menu = $('#' + menuId);
+		var $selectedRow = $menu
+			.find('.elodin-recently-edited-list-item.is-keyboard-selected .elodin-recently-edited-row')
+			.first();
+
+		return $selectedRow.length ? getRowSelectionData($selectedRow) : null;
+	}
+
+	function persistOpenMenuState(menuId, selectionOverride, targetUrl) {
+		var $menu = $('#' + menuId);
+		if (!$menu.length) {
+			return;
+		}
+
+		saveActiveGroup(menuId);
+		saveScrollPosition(menuId);
+
+		var selection = selectionOverride || getSelectedRowSelection(menuId);
+		if (selection) {
+			sessionStorage.setItem(selectionStorageKey(menuId), JSON.stringify(selection));
+		}
+
+		var searchQuery = $menu
+			.find('.elodin-recently-edited-search-input')
+			.first()
+			.val();
+		if (searchQuery) {
+			sessionStorage.setItem(searchStorageKey(menuId), searchQuery);
+		} else {
+			sessionStorage.removeItem(searchStorageKey(menuId));
+		}
+
+		if (targetUrl) {
+			sessionStorage.setItem(targetUrlStorageKey(menuId), targetUrl);
+		} else {
+			sessionStorage.removeItem(targetUrlStorageKey(menuId));
+		}
+
+		sessionStorage.setItem(
+			stateStorageKey(menuId),
+			JSON.stringify({
+				group: getActiveGroup($menu),
+				search: searchQuery || '',
+				selection: selection,
+				scrollTop: getSubmenu($menu).length ? getSubmenu($menu).scrollTop() : 0,
+				targetUrl: targetUrl || '',
+			}),
+		);
+	}
+
 	function selectStoredVisibleRowOrCurrentOrFirst() {
 		var $menu = $('#wp-admin-bar-recently-edited');
 		var storedSelection = $menu.data('restoreSelection');
-		var selectedRow = null;
+		var storedTargetUrl = $menu.data('restoreTargetUrl');
+		var selectedRow = getCurrentVisibleRow() || null;
 
-		if (storedSelection && storedSelection.resourceId && storedSelection.resourceType) {
+		if (!selectedRow && !storedSelection) {
+			selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
+				return indexedRow.item.classList.contains('is-keyboard-selected');
+			});
+			if (selectedRow) {
+				return;
+			}
+		}
+
+		if (!selectedRow && storedSelection && storedSelection.resourceId && storedSelection.resourceType) {
 			selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
 				var $resource = $(indexedRow.row)
 					.find(
@@ -404,13 +684,59 @@ jQuery(function ($) {
 			});
 		}
 
+		if (!selectedRow && storedTargetUrl) {
+			var normalizedTargetUrl = normalizeUrlForSelection(storedTargetUrl);
+			selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
+				var $row = $(indexedRow.row);
+				var viewUrl = normalizeUrlForSelection(
+					String($row.find('.elodin-recently-edited-title-link').first().data('url') || ''),
+				);
+				var editUrl = normalizeUrlForSelection(
+					String($row.find('.elodin-recently-edited-edit').first().data('url') || ''),
+				);
+
+				return normalizedTargetUrl && (viewUrl === normalizedTargetUrl || editUrl === normalizedTargetUrl);
+			});
+		}
+
+		if (!selectedRow && storedSelection && (storedSelection.viewUrl || storedSelection.editUrl)) {
+			selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
+				var $row = $(indexedRow.row);
+				var viewUrl = normalizeUrlForSelection(
+					String($row.find('.elodin-recently-edited-title-link').first().data('url') || ''),
+				);
+				var editUrl = normalizeUrlForSelection(
+					String($row.find('.elodin-recently-edited-edit').first().data('url') || ''),
+				);
+				var storedViewUrl = normalizeUrlForSelection(storedSelection.viewUrl);
+				var storedEditUrl = normalizeUrlForSelection(storedSelection.editUrl);
+
+				return (
+					(storedViewUrl && viewUrl === storedViewUrl) ||
+					(storedEditUrl && editUrl === storedEditUrl)
+				);
+			});
+		}
+
+		if (!selectedRow && storedSelection && storedSelection.searchText) {
+			selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
+				return String($(indexedRow.row).attr('data-search-text') || '') === storedSelection.searchText;
+			});
+		}
+
+		if (!selectedRow && storedSelection && storedSelection.visibleIndex >= 0) {
+			selectedRow = getVisibleIndexedRows()[storedSelection.visibleIndex];
+		}
+
 		if (selectedRow) {
 			setSelectedIndexedRow(selectedRow);
 			$menu.removeData('restoreSelection');
+			$menu.removeData('restoreTargetUrl');
 			return;
 		}
 
 		$menu.removeData('restoreSelection');
+		$menu.removeData('restoreTargetUrl');
 		selectCurrentVisibleRowOrFirst();
 	}
 
@@ -449,7 +775,11 @@ jQuery(function ($) {
 		}
 
 		var $row = $(selected.row);
+		setSelectedIndexedRow(selected);
+		var selection = getRowSelectionData($row);
 		storeRowSelection('wp-admin-bar-recently-edited', $row);
+		persistOpenMenuState('wp-admin-bar-recently-edited', selection);
+		sessionStorage.setItem(storageKey('wp-admin-bar-recently-edited'), 'true');
 		var $target = useEditUrl
 			? $row.find('.elodin-recently-edited-edit').first()
 			: $row.find('.elodin-recently-edited-title-link').first();
@@ -457,6 +787,11 @@ jQuery(function ($) {
 			return;
 		}
 
+		persistOpenMenuState(
+			'wp-admin-bar-recently-edited',
+			selection,
+			String($target.data('url') || ''),
+		);
 		$target.trigger('click');
 	}
 
@@ -483,8 +818,11 @@ jQuery(function ($) {
 			return;
 		}
 
+		releaseForceClosedMenu($menu);
 		cancelClose($menu.attr('id'));
-		$menu.addClass('hover elodin-recently-edited-grace-open');
+		$menu
+			.removeClass('elodin-recently-edited-force-closed')
+			.addClass('hover elodin-recently-edited-grace-open');
 
 		if ($menu.hasClass('elodin-recently-edited-is-lazy')) {
 			var request = loadRecentlyEditedMenu();
@@ -545,6 +883,13 @@ jQuery(function ($) {
 			return false;
 		}
 
+		var $openMenu = getOpenMenu();
+		if ($openMenu.length) {
+			var menuId = $openMenu.attr('id');
+			persistOpenMenuState(menuId, null, url);
+			sessionStorage.setItem(storageKey(menuId), 'true');
+		}
+
 		window.location.href = url;
 		return true;
 	}
@@ -555,8 +900,25 @@ jQuery(function ($) {
 			return false;
 		}
 
+		if (
+			e.shiftKey &&
+			!e.metaKey &&
+			!e.ctrlKey &&
+			!e.altKey &&
+			String(e.key || '').toLowerCase() === 's'
+		) {
+			toggleSelectedRowPin();
+			return true;
+		}
+
 		if (e.key === 'Escape') {
-			clearKeepOpenState($menu.attr('id'));
+			closeRecentlyEditedImmediately();
+			return true;
+		}
+
+		if (e.key === 'Backspace') {
+			$menu.find('.elodin-recently-edited-search-input').first().val('');
+			filterMenuItems($menu, '');
 			return true;
 		}
 
@@ -586,6 +948,20 @@ jQuery(function ($) {
 		}
 
 		return false;
+	}
+
+	function toggleSelectedRowPin() {
+		var selected = getVisibleIndexedRows().find(function (indexedRow) {
+			return indexedRow.item.classList.contains('is-keyboard-selected');
+		});
+		if (!selected) {
+			selected = getVisibleIndexedRows()[0];
+		}
+		if (!selected || !selected.row) {
+			return;
+		}
+
+		$(selected.row).find('.elodin-recently-edited-pin').first().trigger('click');
 	}
 
 	function cancelClose(menuId) {
@@ -921,6 +1297,9 @@ jQuery(function ($) {
 		if (!menuId) {
 			return;
 		}
+		if (forceClosedMenus[menuId]) {
+			return;
+		}
 		cancelClose(menuId);
 		$('#' + menuId).addClass('hover elodin-recently-edited-grace-open');
 		window.setTimeout(function () {
@@ -945,7 +1324,64 @@ jQuery(function ($) {
 		cancelClose(menuId);
 		sessionStorage.removeItem(storageKey(menuId));
 		sessionStorage.removeItem(selectionStorageKey(menuId));
+		sessionStorage.removeItem(searchStorageKey(menuId));
+		sessionStorage.removeItem(stateStorageKey(menuId));
+		sessionStorage.removeItem(targetUrlStorageKey(menuId));
 		$('#' + menuId).removeClass('hover elodin-recently-edited-grace-open');
+	}
+
+	function forceCloseMenu($menu) {
+		var menuId = $menu.attr('id');
+		if (!menuId) {
+			return;
+		}
+
+		forceClosedMenus[menuId] = true;
+		$menu
+			.addClass('elodin-recently-edited-force-closed')
+			.removeClass('hover elodin-recently-edited-grace-open')
+			.attr('aria-expanded', 'false');
+		$menu
+			.children('.ab-sub-wrapper')
+			.each(function () {
+				this.style.setProperty('display', 'none', 'important');
+			})
+			.attr('aria-hidden', 'true');
+	}
+
+	function releaseForceClosedMenu($menu) {
+		var menuId = $menu.attr('id');
+		if (!menuId) {
+			return;
+		}
+
+		forceClosedMenus[menuId] = false;
+		$menu
+			.removeClass('elodin-recently-edited-force-closed')
+			.removeAttr('aria-expanded')
+			.children('.ab-sub-wrapper')
+			.each(function () {
+				this.style.removeProperty('display');
+			})
+			.removeAttr('aria-hidden');
+	}
+
+	function closeRecentlyEditedImmediately() {
+		var closed = false;
+
+		menuIds.forEach(function (menuId) {
+			var $menu = $('#' + menuId);
+			if (!$menu.length) {
+				return;
+			}
+
+			clearKeepOpenState(menuId);
+			forceCloseMenu($menu);
+			$menu.find(':focus').trigger('blur');
+			closed = true;
+		});
+
+		return closed;
 	}
 
 	function getMenuIdFromElement($element) {
@@ -960,23 +1396,44 @@ jQuery(function ($) {
 		menuIds.forEach(function (menuId) {
 			var shouldKeepOpen = sessionStorage.getItem(storageKey(menuId));
 			if (shouldKeepOpen === 'true') {
-				var storedGroup = sessionStorage.getItem(groupStorageKey(menuId));
-				var storedSelection = sessionStorage.getItem(selectionStorageKey(menuId));
+				var storedState = null;
+				try {
+					storedState = JSON.parse(sessionStorage.getItem(stateStorageKey(menuId)) || 'null');
+				} catch (error) {
+					storedState = null;
+				}
+				var storedGroup = storedState && storedState.group ? storedState.group : sessionStorage.getItem(groupStorageKey(menuId));
+				var storedSelection = storedState && storedState.selection ? storedState.selection : sessionStorage.getItem(selectionStorageKey(menuId));
+				var storedSearch = storedState && typeof storedState.search === 'string' ? storedState.search : sessionStorage.getItem(searchStorageKey(menuId));
+				var storedTargetUrl = storedState && storedState.targetUrl ? storedState.targetUrl : sessionStorage.getItem(targetUrlStorageKey(menuId));
 				var $menu = $('#' + menuId);
 				if (storedGroup) {
 					$menu.data('restoreGroup', storedGroup);
 				}
+				if (typeof storedSearch === 'string' && storedSearch !== '') {
+					$menu.data('restoreSearch', storedSearch);
+				}
 				if (storedSelection) {
-					try {
-						$menu.data('restoreSelection', JSON.parse(storedSelection));
-					} catch (error) {
-						$menu.removeData('restoreSelection');
+					if (typeof storedSelection === 'string') {
+						try {
+							$menu.data('restoreSelection', JSON.parse(storedSelection));
+						} catch (error) {
+							$menu.removeData('restoreSelection');
+						}
+					} else {
+						$menu.data('restoreSelection', storedSelection);
 					}
+				}
+				if (storedTargetUrl) {
+					$menu.data('restoreTargetUrl', storedTargetUrl);
 				}
 				// Clear the flag
 				sessionStorage.removeItem(storageKey(menuId));
 				sessionStorage.removeItem(groupStorageKey(menuId));
 				sessionStorage.removeItem(selectionStorageKey(menuId));
+				sessionStorage.removeItem(searchStorageKey(menuId));
+				sessionStorage.removeItem(stateStorageKey(menuId));
+				sessionStorage.removeItem(targetUrlStorageKey(menuId));
 
 				// Add hover class to keep menu open
 				$menu.addClass('hover');
@@ -984,7 +1441,15 @@ jQuery(function ($) {
 					if (storedGroup) {
 						switchRelatedGroup($menu, storedGroup);
 					}
-					restoreScrollPosition(menuId);
+					if (typeof storedSearch === 'string' && storedSearch !== '') {
+						$menu.find('.elodin-recently-edited-search-input').first().val(storedSearch);
+						filterMenuItems($menu, storedSearch, { skipSelection: true });
+					}
+					if (storedState && typeof storedState.scrollTop === 'number') {
+						getSubmenu($menu).scrollTop(storedState.scrollTop);
+					} else {
+						restoreScrollPosition(menuId);
+					}
 					selectStoredVisibleRowOrCurrentOrFirst();
 				}, 0);
 			}
@@ -1009,9 +1474,10 @@ jQuery(function ($) {
 
 		// Set flag to keep menu open after navigation
 		var menuId = getMenuIdFromElement($(this));
-		storeRowSelection(menuId, $(this).closest('.elodin-recently-edited-row'));
-		saveActiveGroup(menuId);
-		saveScrollPosition(menuId);
+		var $row = $(this).closest('.elodin-recently-edited-row');
+		var selection = getRowSelectionData($row);
+		storeRowSelection(menuId, $row);
+		persistOpenMenuState(menuId, selection, String(url || ''));
 		sessionStorage.setItem(storageKey(menuId), 'true');
 
 		window.location.href = url;
@@ -1052,6 +1518,10 @@ jQuery(function ($) {
 		'mouseleave',
 		'#wp-admin-bar-recently-edited',
 		function () {
+			if ($(this).hasClass('elodin-recently-edited-force-closed')) {
+				releaseForceClosedMenu($(this));
+				return;
+			}
 			scheduleClose($(this).attr('id'));
 		},
 	);
@@ -1064,6 +1534,9 @@ jQuery(function ($) {
 		'#wp-admin-bar-recently-edited',
 		function () {
 			var menuId = $(this).attr('id');
+			if (forceClosedMenus[menuId]) {
+				return;
+			}
 			cancelClose(menuId);
 			$(this).removeClass('elodin-recently-edited-grace-open');
 			menuIds.forEach(function (id) {
@@ -1080,6 +1553,22 @@ jQuery(function ($) {
 		$(this).prop('disabled', true).text('Loading...');
 		loadRecentlyEditedMenu();
 	});
+
+	$(document).on(
+		'click',
+		'#wp-admin-bar-recently-edited .elodin-recently-edited-cache-refresh',
+		function (e) {
+			e.preventDefault();
+			e.stopPropagation();
+
+			var $link = $(this);
+			if ($link.attr('aria-disabled') === 'true') {
+				return;
+			}
+
+			rebuildRecentlyEditedCache($link);
+		},
+	);
 
 	/**
 	 * Filter menu items based on search input
@@ -1116,6 +1605,23 @@ jQuery(function ($) {
 				e.stopPropagation();
 			}
 		},
+	);
+
+	document.addEventListener(
+		'keydown',
+		function (e) {
+			if (e.key !== 'Escape') {
+				return;
+			}
+
+			if (!closeRecentlyEditedImmediately()) {
+				return;
+			}
+
+			e.preventDefault();
+			e.stopPropagation();
+		},
+		true,
 	);
 
 	$(document).on('keydown', function (e) {
@@ -1194,11 +1700,14 @@ jQuery(function ($) {
 	 * Initialize menu state on page load
 	 */
 	setScrollbarWidthVariable();
+	setPageScrollbarCompensation();
 	updateSearchPlaceholder();
 	checkAndRestoreMenuState();
 	if (!hydrateRecentlyEditedMenuFromCache()) {
 		scheduleMenuIndexBuild();
 	}
+
+	$(window).on('resize orientationchange', setPageScrollbarCompensation);
 
 	/**
 	 * Persist scroll position while scrolling
@@ -1236,6 +1745,8 @@ jQuery(function ($) {
 			})
 				.done(function (response) {
 					if (response.success) {
+						var $selectedRow = $pin.closest('.elodin-recently-edited-row');
+						var selectedResource = getRowSelectionData($selectedRow);
 						// Toggle the pin visually
 						var isPinned = $pin.hasClass('is-pinned');
 						var $matchingPins = $(
@@ -1247,6 +1758,20 @@ jQuery(function ($) {
 							$matchingPins.removeClass('is-pinned').text('☆');
 						} else {
 							$matchingPins.addClass('is-pinned').text('★');
+						}
+						sortRowsByPinnedState();
+						if (selectedResource) {
+							var selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
+								var rowResource = getRowSelectionData($(indexedRow.row));
+								return (
+									rowResource &&
+									rowResource.resourceType === selectedResource.resourceType &&
+									rowResource.resourceId === selectedResource.resourceId
+								);
+							});
+							if (selectedRow) {
+								setSelectedIndexedRow(selectedRow);
+							}
 						}
 						clearClientMenuCache();
 					} else {

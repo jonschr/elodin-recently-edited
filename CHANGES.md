@@ -1,6 +1,27 @@
 # Changelog
 
+## 1.6.0 - 2026-05-13
+- Refined the Recently Edited toolbar styling across front-end and backend contexts for more consistent typography, spacing, and selected states.
+- Improved the search field with a more polished visual treatment, updated placeholder copy, and platform-aware shortcut guidance.
+- Hardened Escape handling so Recently Edited closes immediately and stays closed until intentionally reopened.
+- Prevented the lazy “Build Initial Index” shell from flashing during cached or REST menu hydration.
+- Preserved Recently Edited view, search, and selection state more reliably while navigating through menu results.
+- Kept starred items sorted to the top within each visible context without adding them to unrelated views.
+- Added a plain Settings link and Rebuild cache link beside the toolbar search field.
+- Added and refined settings for disabling the admin-bar search, controlling visible content types, and documenting keyboard shortcuts.
+
 ## 1.5.0 - 2026-05-13
+- Added a Settings > Recently Edited page with a default-enabled option to force Gutenberg fullscreen mode off.
+- Added a default-enabled setting to hide the WordPress admin-bar search and keep the Recently Edited toolbar item from shifting on the front end.
+- Added Settings checkboxes for controlling which post types appear in the Recently Edited menu and search index.
+- Excluded internal taxonomy, post type, navigation menu, options page, field group, overlay panel, and legacy pattern records from the Recently Edited content type settings list.
+- Changed Recently Edited settings checkboxes to save automatically over AJAX when toggled.
+- Added a keyboard shortcuts reference to the Recently Edited settings page.
+- Added a Settings link beside the Recently Edited toolbar search field.
+- Added a toolbar link to flush and rebuild the Recently Edited cache.
+- Stabilized the Recently Edited menu width and scrollbar gutter so switching content types does not visually shift the panel.
+- Added scoped right-side spacing compensation so the Recently Edited toolbar item does not shift between pages with and without vertical scrolling.
+- Refined the Recently Edited content type switcher styling with clearer selected states and count badges.
 - Rebuilt the Recently Edited cache automatically after post saves, deletes, and status transitions, including an immediate background rebuild and browser cache-version bump.
 - Fixed cache invalidation to clear both admin and front-end/REST menu cache variants so newly published or edited posts appear promptly.
 - Changed stale or missing browser indexes to rebuild automatically on page load instead of requiring the Build Initial Index button.

@@ -33,6 +33,7 @@ function elodin_recently_edited_enqueue_assets() {
 	$nonce_post_type = wp_create_nonce( 'elodin_recently_edited_post_type' );
 	$nonce_title     = wp_create_nonce( 'elodin_recently_edited_title' );
 	$nonce_slug      = wp_create_nonce( 'elodin_recently_edited_slug' );
+	$nonce_cache     = wp_create_nonce( 'elodin_recently_edited_cache' );
 	$current_post_id = function_exists( 'elodin_recently_edited_get_current_post_id' ) ? elodin_recently_edited_get_current_post_id() : 0;
 	$current_post    = $current_post_id ? get_post( $current_post_id ) : null;
 	$current_edit_url = '';
@@ -57,6 +58,7 @@ function elodin_recently_edited_enqueue_assets() {
 			'noncePostType' => $nonce_post_type,
 			'nonceTitle'    => $nonce_title,
 			'nonceSlug'     => $nonce_slug,
+			'nonceCache'    => $nonce_cache,
 			'menuRestUrl'   => esc_url_raw( rest_url( 'elodin-recently-edited/v1/menu' ) ),
 			'restNonce'     => wp_create_nonce( 'wp_rest' ),
 			'currentPostType' => function_exists( 'elodin_recently_edited_get_current_post_type' ) ? elodin_recently_edited_get_current_post_type() : '',

@@ -6,6 +6,38 @@
  */
 
 /**
+ * Flush and rebuild the Recently Edited menu cache.
+ *
+ * @since 1.5.0
+ *
+ * @return void
+ */
+function elodin_recently_edited_flush_menu_cache_ajax() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( array( 'message' => __( 'You do not have permission to rebuild this cache.', 'elodin-recently-edited' ) ), 403 );
+	}
+
+	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'elodin_recently_edited_cache' ) ) {
+		wp_send_json_error( array( 'message' => __( 'Security check failed.', 'elodin-recently-edited' ) ), 403 );
+	}
+
+	if ( function_exists( 'elodin_recently_edited_clear_menu_cache' ) ) {
+		elodin_recently_edited_clear_menu_cache();
+	}
+
+	if ( function_exists( 'elodin_recently_edited_rebuild_menu_cache' ) ) {
+		elodin_recently_edited_rebuild_menu_cache( get_current_user_id() );
+	}
+
+	wp_send_json_success(
+		array(
+			'message'     => __( 'Cache rebuilt.', 'elodin-recently-edited' ),
+			'cacheSchema' => function_exists( 'elodin_recently_edited_get_client_menu_cache_version' ) ? elodin_recently_edited_get_client_menu_cache_version() : 1,
+		)
+	);
+}
+
+/**
  * Toggle pin status for a post.
  *
  * @since 0.1
