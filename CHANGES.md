@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.1 - 2026-06-13
+- Hardened the Recently Edited search field typography so entered text and placeholder text keep a consistent font size across front-end and backend admin-bar contexts, regardless of theme styles.
+
 ## 1.6.0 - 2026-05-13
 - Refined the Recently Edited toolbar styling across front-end and backend contexts for more consistent typography, spacing, and selected states.
 - Improved the search field with a more polished visual treatment, updated placeholder copy, and platform-aware shortcut guidance.
