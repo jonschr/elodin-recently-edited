@@ -837,3 +837,204 @@
 		padding-top: 0 !important;
 	}
 }
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-search {
+	position: relative !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-search-input {
+	padding-right: 30px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-search-clear {
+	position: absolute !important;
+	top: 50% !important;
+	right: 5px !important;
+	display: none !important;
+	align-items: center !important;
+	justify-content: center !important;
+	width: 22px !important;
+	height: 22px !important;
+	padding: 0 !important;
+	transform: translateY(-50%) !important;
+	border: 0 !important;
+	border-radius: 50% !important;
+	background: transparent !important;
+	color: rgba(255, 255, 255, 0.58) !important;
+	font-size: 18px !important;
+	line-height: 1 !important;
+	cursor: pointer !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-search-clear.is-visible {
+	display: inline-flex !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-search-clear:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-search-clear:focus {
+	background: rgba(255, 255, 255, 0.1) !important;
+	color: #fff !important;
+	outline: 1px solid rgba(244, 197, 66, 0.58) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-starred {
+	background: rgba(244, 197, 66, 0.045) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-first-starred,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-first-recent {
+	contain: none !important;
+	content-visibility: visible !important;
+	padding-top: 20px !important;
+	position: relative !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-first-starred::before,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-first-recent::before {
+	position: absolute !important;
+	top: 0 !important;
+	left: 8px !important;
+	right: 8px !important;
+	height: 20px !important;
+	color: rgba(255, 255, 255, 0.46) !important;
+	font-size: 9px !important;
+	font-weight: 600 !important;
+	line-height: 20px !important;
+	letter-spacing: 0.06em !important;
+	text-transform: uppercase !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-first-starred::before {
+	content: attr(data-section-label) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-first-recent::before {
+	content: attr(data-section-label) !important;
+	border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited.elodin-recently-edited-media-view .elodin-recently-edited-column-header-item {
+	display: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-grid {
+	display: none !important;
+	grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+	gap: 10px !important;
+	padding: 10px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited.elodin-recently-edited-media-view .elodin-recently-edited-media-grid {
+	display: grid !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited.elodin-recently-edited-media-view .elodin-recently-edited-post-list {
+	max-height: calc(80vh - 116px) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-card {
+	min-width: 0 !important;
+	padding: 7px !important;
+	border: 1px solid rgba(255, 255, 255, 0.12) !important;
+	border-radius: 5px !important;
+	background: rgba(255, 255, 255, 0.045) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-card.is-keyboard-selected,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-card:focus-within {
+	border-color: rgba(244, 197, 66, 0.72) !important;
+	background: rgba(244, 197, 66, 0.1) !important;
+	outline: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-preview {
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	width: 100% !important;
+	height: 88px !important;
+	padding: 0 !important;
+	overflow: hidden !important;
+	border: 0 !important;
+	border-radius: 3px !important;
+	background: rgba(0, 0, 0, 0.24) !important;
+	cursor: zoom-in !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-preview img {
+	display: block !important;
+	width: 100% !important;
+	height: 100% !important;
+	object-fit: contain !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-filename {
+	display: block !important;
+	width: 100% !important;
+	padding: 7px 0 3px !important;
+	overflow: hidden !important;
+	border: 0 !important;
+	background: transparent !important;
+	color: #fff !important;
+	font-size: 11px !important;
+	line-height: 16px !important;
+	text-align: left !important;
+	text-overflow: ellipsis !important;
+	white-space: nowrap !important;
+	cursor: copy !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-filename:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-filename:focus {
+	color: #f4c542 !important;
+	text-decoration: underline !important;
+	outline: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-meta,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-actions {
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+	gap: 6px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-meta {
+	color: rgba(255, 255, 255, 0.5) !important;
+	font-size: 9px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-actions {
+	margin-top: 6px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-actions button {
+	padding: 0 !important;
+	border: 0 !important;
+	background: transparent !important;
+	color: rgba(255, 255, 255, 0.64) !important;
+	font-size: 10px !important;
+	cursor: pointer !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-actions button:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-actions button:focus {
+	color: #fff !important;
+	text-decoration: underline !important;
+	outline: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-empty,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-loading {
+	grid-column: 1 / -1 !important;
+	padding: 18px !important;
+	color: rgba(255, 255, 255, 0.65) !important;
+	font-size: 12px !important;
+	text-align: center !important;
+}
+
+@media (max-width: 700px) {
+	#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
+}

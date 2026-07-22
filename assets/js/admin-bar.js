@@ -11,6 +11,8 @@ jQuery(function ($) {
 	var closeTimers = {};
 	var forceClosedMenus = {};
 	var menuLoadRequest = null;
+	var mediaLoadRequest = null;
+	var mediaItems = [];
 	var shellRevealTimer = null;
 	var shellRevealDelayMs = 700;
 	var rowIndex = null;
@@ -182,8 +184,38 @@ jQuery(function ($) {
 	function clearClientMenuCache() {
 		try {
 			window.localStorage.removeItem(getClientCacheKey());
+			window.localStorage.removeItem(getClientCacheKey() + '_media_v2');
 		} catch (error) {
 			// no-op
+		}
+	}
+
+	function announce(message) {
+		var $region = $('.elodin-recently-edited-live-region').first();
+		if (!$region.length) {
+			return;
+		}
+		$region.text('');
+		window.setTimeout(function () {
+			$region.text(message || '');
+		}, 20);
+	}
+
+	function updateSearchClearButton($menu) {
+		$menu = $menu && $menu.length ? $menu : $('#wp-admin-bar-recently-edited');
+		var hasQuery = String(
+			$menu.find('.elodin-recently-edited-search-input').first().val() || '',
+		).length > 0;
+		$menu.find('.elodin-recently-edited-search-clear').toggleClass('is-visible', hasQuery);
+	}
+
+	function clearSearch($menu, focusInput) {
+		var $input = $menu.find('.elodin-recently-edited-search-input').first();
+		$input.val('');
+		filterMenuItems($menu, '');
+		updateSearchClearButton($menu);
+		if (focusInput && $input.length) {
+			$input.focus();
 		}
 	}
 
@@ -235,6 +267,8 @@ jQuery(function ($) {
 			$menu.find('.elodin-recently-edited-search-input').first().val(storedSearch);
 			filterMenuItems($menu, storedSearch, { skipSelection: true });
 		}
+		updateSearchClearButton($menu);
+		sortRowsByPinnedState();
 		$menu.removeData('restoreSearch');
 		restoreScrollPosition($menu.attr('id'));
 		selectStoredVisibleRowOrCurrentOrFirst();
@@ -380,6 +414,228 @@ jQuery(function ($) {
 		return menuLoadRequest;
 	}
 
+	function readClientMediaCache() {
+		try {
+			var raw = window.localStorage.getItem(getClientCacheKey() + '_media_v2');
+			var cached = raw ? JSON.parse(raw) : null;
+			return cached && Array.isArray(cached.items) ? cached.items : null;
+		} catch (error) {
+			return null;
+		}
+	}
+
+	function writeClientMediaCache(items) {
+		try {
+			window.localStorage.setItem(
+				getClientCacheKey() + '_media_v2',
+				JSON.stringify({ createdAt: Date.now(), items: items }),
+			);
+		} catch (error) {
+			// Storage can fail in private browsing or when quota is full.
+		}
+	}
+
+	function getMediaGrid() {
+		var $list = $('#wp-admin-bar-recently-edited .elodin-recently-edited-post-list').first();
+		var $grid = $list.children('.elodin-recently-edited-media-grid').first();
+		if (!$grid.length) {
+			$grid = $('<div>', {
+				class: 'elodin-recently-edited-media-grid',
+				role: 'list',
+				'aria-label': 'Recently modified media',
+			}).appendTo($list);
+		}
+		return $grid;
+	}
+
+	function renderMediaItems(items) {
+		mediaItems = Array.isArray(items) ? items : [];
+		var $grid = getMediaGrid().empty();
+
+		mediaItems.forEach(function (item) {
+			var dimensions = item.width && item.height ? item.width + '×' + item.height : item.mimeType || '';
+			var searchText = normalizeSearchText(
+				[item.filename, item.title, item.alt, item.caption, item.mimeType, item.id].join(' '),
+			);
+			var $card = $('<div>', {
+				class: 'elodin-recently-edited-media-card',
+				role: 'listitem',
+				tabindex: '-1',
+				'data-search-text': searchText,
+				'data-media-id': item.id,
+			});
+			var $preview = $('<button>', {
+				type: 'button',
+				class: 'elodin-recently-edited-media-preview',
+				'aria-label': 'Preview ' + item.filename,
+			}).attr('data-url', item.url || '');
+			if (item.thumbnail) {
+				$('<img>', {
+					src: item.thumbnail,
+					alt: '',
+					loading: 'lazy',
+				}).appendTo($preview);
+			}
+			$preview.appendTo($card);
+
+			$('<button>', {
+				type: 'button',
+				class: 'elodin-recently-edited-media-filename',
+				text: item.filename,
+				title: 'Copy filename: ' + item.filename,
+			}).attr('data-copy-text', item.filename).appendTo($card);
+
+			var $meta = $('<div>', { class: 'elodin-recently-edited-media-meta' }).appendTo($card);
+			$('<span>', { text: item.modifiedAgo || '' })
+				.attr('title', item.modifiedAt ? 'Last updated: ' + item.modifiedAt : '')
+				.appendTo($meta);
+			$('<span>', { text: dimensions }).appendTo($meta);
+
+			var $actions = $('<div>', { class: 'elodin-recently-edited-media-actions' }).appendTo($card);
+			$('<button>', {
+				type: 'button',
+				class: 'elodin-recently-edited-media-copy-url',
+				text: 'Copy URL',
+			}).attr('data-copy-text', item.url || '').appendTo($actions);
+			$('<button>', {
+				type: 'button',
+				class: 'elodin-recently-edited-media-edit',
+				text: 'Edit',
+			}).attr('data-url', item.editUrl || '').appendTo($actions);
+
+			$card.appendTo($grid);
+		});
+
+		$('<div>', {
+			class: 'elodin-recently-edited-media-empty',
+			text: (ElodinRecentlyEdited.strings || {}).noMediaMatches || 'No media matches found.',
+		}).appendTo($grid);
+
+		filterMediaItems(
+			$('#wp-admin-bar-recently-edited .elodin-recently-edited-search-input').first().val(),
+		);
+	}
+
+	function filterMediaItems(query) {
+		var $grid = getMediaGrid();
+		var normalized = normalizeSearchText(query);
+		var matches = 0;
+		$grid.children('.elodin-recently-edited-media-card').each(function () {
+			var isMatch = !normalized || String($(this).attr('data-search-text') || '').indexOf(normalized) !== -1;
+			$(this).toggle(isMatch);
+			if (isMatch) {
+				matches += 1;
+			}
+		});
+		$grid.children('.elodin-recently-edited-media-empty').toggle(matches === 0);
+		var $selected = $grid.children('.elodin-recently-edited-media-card.is-keyboard-selected:visible').first();
+		if (!$selected.length) {
+			setSelectedMediaCard(null);
+		}
+	}
+
+	function getVisibleMediaCards() {
+		return getMediaGrid().children('.elodin-recently-edited-media-card:visible');
+	}
+
+	function getMediaColumnCount() {
+		var grid = getMediaGrid()[0];
+		if (!grid || !window.getComputedStyle) {
+			return 5;
+		}
+
+		var template = window.getComputedStyle(grid).gridTemplateColumns || '';
+		var columns = template.trim() ? template.trim().split(/\s+/).length : 0;
+		return Math.max(1, columns || 5);
+	}
+
+	function setSelectedMediaCard($card) {
+		var $cards = getMediaGrid().children('.elodin-recently-edited-media-card');
+		$cards.removeClass('is-keyboard-selected').attr('tabindex', '-1');
+		if (!$card || !$card.length) {
+			return;
+		}
+		$card.addClass('is-keyboard-selected').attr('tabindex', '0');
+		if ($card[0] && typeof $card[0].scrollIntoView === 'function') {
+			$card[0].scrollIntoView({ block: 'nearest' });
+		}
+	}
+
+	function selectRelativeMediaCard(step) {
+		var $cards = getVisibleMediaCards();
+		if (!$cards.length) {
+			return;
+		}
+		var currentIndex = $cards.index($cards.filter('.is-keyboard-selected').first());
+		if (currentIndex < 0) {
+			setSelectedMediaCard($cards.eq(0));
+			return;
+		}
+		if (step < 0 && currentIndex < getMediaColumnCount()) {
+			setSelectedMediaCard(null);
+			return;
+		}
+		setSelectedMediaCard($cards.eq(Math.max(0, Math.min($cards.length - 1, currentIndex + step))));
+	}
+
+	function activateSelectedMediaCard(useEditUrl) {
+		var $card = getVisibleMediaCards().filter('.is-keyboard-selected').first();
+		if (!$card.length) {
+			$card = getVisibleMediaCards().first();
+		}
+		if (!$card.length) {
+			return;
+		}
+		if (useEditUrl) {
+			$card.find('.elodin-recently-edited-media-edit').first().trigger('click');
+			return;
+		}
+		$card.find('.elodin-recently-edited-media-filename').first().trigger('click');
+	}
+
+	function loadMediaItems() {
+		var cached = readClientMediaCache();
+		if (cached) {
+			renderMediaItems(cached);
+			return null;
+		}
+		if (mediaLoadRequest) {
+			return mediaLoadRequest;
+		}
+
+		var $grid = getMediaGrid().empty().append(
+			$('<div>', {
+				class: 'elodin-recently-edited-media-loading',
+				text: (ElodinRecentlyEdited.strings || {}).loadingMedia || 'Loading media...',
+			}),
+		);
+		mediaLoadRequest = $.ajax({
+			url: ElodinRecentlyEdited.mediaRestUrl,
+			method: 'GET',
+			beforeSend: function (xhr) {
+				xhr.setRequestHeader('X-WP-Nonce', ElodinRecentlyEdited.restNonce);
+			},
+		})
+			.done(function (response) {
+				var items = response && Array.isArray(response.items) ? response.items : [];
+				writeClientMediaCache(items);
+				renderMediaItems(items);
+			})
+			.fail(function () {
+				$grid.empty().append(
+					$('<div>', {
+						class: 'elodin-recently-edited-media-loading',
+						text: (ElodinRecentlyEdited.strings || {}).unableToLoadMedia || 'Unable to load media.',
+					}),
+				);
+			})
+			.always(function () {
+				mediaLoadRequest = null;
+			});
+
+		return mediaLoadRequest;
+	}
+
 	function rebuildRecentlyEditedCache($link) {
 		var originalText = $link.text();
 
@@ -421,6 +677,16 @@ jQuery(function ($) {
 		var normalized = normalizeSearchText(query);
 		var matchCount = 0;
 		var activeGroup = getActiveGroup($menu);
+		updateSearchClearButton($menu);
+
+		if (activeGroup === 'media') {
+			getRowIndex().forEach(function (indexedRow) {
+				indexedRow.item.style.display = 'none';
+			});
+			$menu.find('.elodin-recently-edited-no-matches').hide();
+			filterMediaItems(query);
+			return;
+		}
 
 		getRowIndex().forEach(function (indexedRow) {
 			if (!indexedRowMatchesGroup(indexedRow, activeGroup)) {
@@ -447,10 +713,26 @@ jQuery(function ($) {
 		if (!options.skipSelection) {
 			selectFirstVisibleRow();
 		}
+		updateSectionLabels();
 	}
 
 	function getOpenMenu() {
-		return $('#wp-admin-bar-recently-edited.hover').first();
+		return $('#wp-admin-bar-recently-edited')
+			.filter(function () {
+				var $menu = $(this);
+				if ($menu.hasClass('elodin-recently-edited-force-closed')) {
+					return false;
+				}
+
+				return (
+					$menu.hasClass('hover') ||
+					$menu.hasClass('elodin-recently-edited-grace-open') ||
+					$menu.attr('aria-expanded') === 'true' ||
+					$menu.find(':focus').length > 0 ||
+					$menu.children('.ab-sub-wrapper').is(':visible')
+				);
+			})
+			.first();
 	}
 
 	function getVisibleIndexedRows() {
@@ -479,12 +761,10 @@ jQuery(function ($) {
 				return aPinned ? -1 : 1;
 			}
 
-			if (aPinned) {
-				var aModified = parseInt($a.find('.elodin-recently-edited-row').attr('data-modified') || 0, 10);
-				var bModified = parseInt($b.find('.elodin-recently-edited-row').attr('data-modified') || 0, 10);
-				if (aModified !== bModified) {
-					return aModified > bModified ? -1 : 1;
-				}
+			var aModified = parseInt($a.find('.elodin-recently-edited-row').attr('data-modified') || 0, 10);
+			var bModified = parseInt($b.find('.elodin-recently-edited-row').attr('data-modified') || 0, 10);
+			if (aModified !== bModified) {
+				return aModified > bModified ? -1 : 1;
 			}
 
 			return 0;
@@ -492,6 +772,43 @@ jQuery(function ($) {
 
 		$list.append(rows);
 		invalidateRowIndex();
+		updateSectionLabels();
+	}
+
+	function updateSectionLabels() {
+		var $menu = $('#wp-admin-bar-recently-edited');
+		var $items = $menu.find('.elodin-recently-edited-list-item');
+		$items
+			.removeClass('is-starred is-first-starred is-first-recent')
+			.removeAttr('data-section-label');
+		$items.each(function () {
+			$(this).toggleClass(
+				'is-starred',
+				$(this).find('.elodin-recently-edited-pin.is-pinned').length > 0,
+			);
+		});
+		if (getActiveGroup($menu) === 'media') {
+			return;
+		}
+
+		var visibleRows = getVisibleIndexedRows();
+		var firstStarred = visibleRows.find(function (indexedRow) {
+			return $(indexedRow.row).find('.elodin-recently-edited-pin.is-pinned').length > 0;
+		});
+		var firstRecent = visibleRows.find(function (indexedRow) {
+			return $(indexedRow.row).find('.elodin-recently-edited-pin.is-pinned').length === 0;
+		});
+
+		if (firstStarred) {
+			$(firstStarred.item)
+				.addClass('is-first-starred')
+				.attr('data-section-label', (ElodinRecentlyEdited.strings || {}).starred || 'Starred');
+		}
+		if (firstStarred && firstRecent) {
+			$(firstRecent.item)
+				.addClass('is-first-recent')
+				.attr('data-section-label', (ElodinRecentlyEdited.strings || {}).recentlyEdited || 'Recently edited');
+		}
 	}
 
 	function setSelectedIndexedRow(indexedRow) {
@@ -812,11 +1129,14 @@ jQuery(function ($) {
 		selectFirstVisibleRow();
 	}
 
-	function focusRecentlyEditedSearch() {
+	function focusRecentlyEditedSearch(selectExistingQuery) {
 		var $menu = $('#wp-admin-bar-recently-edited');
 		if (!$menu.length) {
 			return;
 		}
+		var wasOpen = typeof selectExistingQuery === 'boolean'
+			? selectExistingQuery
+			: $menu.hasClass('hover');
 
 		releaseForceClosedMenu($menu);
 		cancelClose($menu.attr('id'));
@@ -828,7 +1148,7 @@ jQuery(function ($) {
 			var request = loadRecentlyEditedMenu();
 			if (request) {
 				request.done(function () {
-					focusRecentlyEditedSearch();
+					focusRecentlyEditedSearch(wasOpen);
 				});
 			}
 			return;
@@ -840,7 +1160,13 @@ jQuery(function ($) {
 		}
 
 		switchRelatedGroup($menu, 'all');
-		$input.focus().select();
+		$input.focus();
+		if (wasOpen) {
+			$input.select();
+		} else if ($input[0] && typeof $input[0].setSelectionRange === 'function') {
+			var queryLength = String($input.val() || '').length;
+			$input[0].setSelectionRange(queryLength, queryLength);
+		}
 		selectFirstVisibleRow();
 	}
 
@@ -917,9 +1243,36 @@ jQuery(function ($) {
 		}
 
 		if (e.key === 'Backspace') {
-			$menu.find('.elodin-recently-edited-search-input').first().val('');
-			filterMenuItems($menu, '');
+			if ($(e.target).is('.elodin-recently-edited-search-input')) {
+				return false;
+			}
+			clearSearch($menu, true);
 			return true;
+		}
+
+		if (getActiveGroup($menu) === 'media') {
+			var hasSelectedMedia = getVisibleMediaCards().filter('.is-keyboard-selected').length > 0;
+			var mediaColumnCount = getMediaColumnCount();
+			if (hasSelectedMedia && e.key === 'ArrowRight') {
+				selectRelativeMediaCard(1);
+				return true;
+			}
+			if (hasSelectedMedia && e.key === 'ArrowLeft') {
+				selectRelativeMediaCard(-1);
+				return true;
+			}
+			if (e.key === 'ArrowDown') {
+				selectRelativeMediaCard(hasSelectedMedia ? mediaColumnCount : 0);
+				return true;
+			}
+			if (hasSelectedMedia && e.key === 'ArrowUp') {
+				selectRelativeMediaCard(-mediaColumnCount);
+				return true;
+			}
+			if (e.key === 'Enter') {
+				activateSelectedMediaCard(isMac ? e.metaKey : e.ctrlKey);
+				return true;
+			}
 		}
 
 		if (e.key === 'ArrowDown') {
@@ -1016,6 +1369,11 @@ jQuery(function ($) {
 
 		$menu.find('.elodin-related-pill').removeClass('is-active');
 		$targetPill.addClass('is-active');
+		$menu.toggleClass('elodin-recently-edited-media-view', target === 'media');
+		if (target === 'media') {
+			setSelectedMediaCard(null);
+			loadMediaItems();
+		}
 
 		getRowIndex().forEach(function (indexedRow) {
 			indexedRow.item.classList.toggle(
@@ -1030,6 +1388,7 @@ jQuery(function ($) {
 		);
 		$menu.find('.elodin-recently-edited-post-list').scrollTop(0);
 		selectFirstVisibleRow();
+		updateSectionLabels();
 	}
 
 	function saveActiveGroup(menuId) {
@@ -1139,7 +1498,9 @@ jQuery(function ($) {
 		var originalText = $element.text();
 
 		function showCopied() {
-			$element.text(feedbackText || 'Copied');
+			var message = feedbackText || (ElodinRecentlyEdited.strings || {}).copied || 'Copied';
+			$element.text(message);
+			announce(message);
 			window.setTimeout(function () {
 				$element.text(originalText);
 			}, 900);
@@ -1226,6 +1587,7 @@ jQuery(function ($) {
 					);
 					closeSlugEditor($input, response.data.slug);
 					clearClientMenuCache();
+					announce('Slug updated');
 				} else {
 					$input.prop('disabled', false).data('saving', false).focus();
 					alert(
@@ -1279,6 +1641,7 @@ jQuery(function ($) {
 					);
 					closeTitleEditor($input, response.data.title);
 					clearClientMenuCache();
+					announce('Title updated');
 				} else {
 					$input.prop('disabled', false).data('saving', false).focus();
 					alert(
@@ -1483,6 +1846,20 @@ jQuery(function ($) {
 		window.location.href = url;
 	});
 
+	$(document).on(
+		'keydown',
+		'.elodin-recently-edited-action, .elodin-recently-edited-pin, .elodin-recently-edited-slug-text, .elodin-recently-edited-id',
+		function (e) {
+			if (e.key !== 'Enter' && e.key !== ' ') {
+				return;
+			}
+			e.preventDefault();
+			e.stopPropagation();
+			e.stopImmediatePropagation();
+			$(this).trigger('click');
+		},
+	);
+
 	/**
 	 * Switch content type lists on click without navigating.
 	 */
@@ -1585,6 +1962,12 @@ jQuery(function ($) {
 		},
 	);
 
+	$(document).on('click', '.elodin-recently-edited-search-clear', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		clearSearch($('#wp-admin-bar-recently-edited'), true);
+	});
+
 	$(document).on(
 		'click',
 		'.elodin-recently-edited-search-input',
@@ -1603,6 +1986,7 @@ jQuery(function ($) {
 			if (handleMenuNavigationKeydown(e)) {
 				e.preventDefault();
 				e.stopPropagation();
+				e.stopImmediatePropagation();
 			}
 		},
 	);
@@ -1774,6 +2158,7 @@ jQuery(function ($) {
 							}
 						}
 						clearClientMenuCache();
+						announce(isPinned ? 'Removed from Starred' : 'Added to Starred');
 					} else {
 						alert(
 							'Error toggling pin: ' +
@@ -2046,6 +2431,41 @@ jQuery(function ($) {
 		copyTextWithFeedback($id, copyText, feedbackText);
 	});
 
+	$(document).on('click', '.elodin-recently-edited-media-filename', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		var $button = $(this);
+		copyTextWithFeedback(
+			$button,
+			$button.attr('data-copy-text') || '',
+			(ElodinRecentlyEdited.strings || {}).copiedFilename || 'Copied filename',
+		);
+	});
+
+	$(document).on('click', '.elodin-recently-edited-media-copy-url', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		var $button = $(this);
+		copyTextWithFeedback(
+			$button,
+			$button.attr('data-copy-text') || '',
+			(ElodinRecentlyEdited.strings || {}).copiedUrl || 'Copied URL',
+		);
+	});
+
+	$(document).on('click', '.elodin-recently-edited-media-preview, .elodin-recently-edited-media-edit', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		var url = $(this).attr('data-url');
+		if (url) {
+			window.open(url, '_blank', 'noopener');
+		}
+	});
+
+	$(document).on('click focusin', '.elodin-recently-edited-media-card', function () {
+		setSelectedMediaCard($(this));
+	});
+
 	/**
 	 * Handle status change for posts
 	 */
@@ -2062,7 +2482,9 @@ jQuery(function ($) {
 				return;
 			}
 			if (status === 'delete') {
-				if (!confirm('Are you sure you want to delete this post?')) {
+				var postTitle = $select.attr('data-post-title') || 'this item';
+				var confirmTemplate = (ElodinRecentlyEdited.strings || {}).moveToTrashConfirm || 'Move "%s" to the Trash?';
+				if (!confirm(confirmTemplate.replace('%s', postTitle))) {
 					$select.val(original);
 					return;
 				}
@@ -2091,6 +2513,8 @@ jQuery(function ($) {
 						}
 						invalidateRowIndex();
 						clearClientMenuCache();
+						updateSectionLabels();
+						announce(status === 'delete' ? 'Moved to Trash' : 'Status updated');
 					} else {
 						// Revert on error
 						$select.val(original);
@@ -2142,6 +2566,7 @@ jQuery(function ($) {
 							.data('original', status)
 							.val(status);
 						clearClientMenuCache();
+						announce('Form status updated');
 					} else {
 						$select.val(original);
 						alert(
@@ -2193,6 +2618,7 @@ jQuery(function ($) {
 							.val(postType);
 						invalidateRowIndex();
 						clearClientMenuCache();
+						announce('Content type updated');
 					} else {
 						// Revert on error
 						$select.val(original);

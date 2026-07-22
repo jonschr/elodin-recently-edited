@@ -300,11 +300,11 @@ function elodin_recently_edited_render_settings_page() {
 		),
 		array(
 			'keys'        => __( 'Up / Down', 'elodin-recently-edited' ),
-			'description' => __( 'Move the highlighted row.', 'elodin-recently-edited' ),
+			'description' => __( 'Move the highlighted result; in Media, move between grid rows.', 'elodin-recently-edited' ),
 		),
 		array(
 			'keys'        => __( 'Left / Right', 'elodin-recently-edited' ),
-			'description' => __( 'Switch content type views, wrapping at the ends.', 'elodin-recently-edited' ),
+			'description' => __( 'Switch content type views; in Media, move between files.', 'elodin-recently-edited' ),
 		),
 		array(
 			'keys'        => __( 'Enter', 'elodin-recently-edited' ),
@@ -320,7 +320,7 @@ function elodin_recently_edited_render_settings_page() {
 		),
 		array(
 			'keys'        => __( 'Backspace', 'elodin-recently-edited' ),
-			'description' => __( 'Clear the active search.', 'elodin-recently-edited' ),
+			'description' => __( 'Edit normally in the search field; from the results, clear the search and return focus to it.', 'elodin-recently-edited' ),
 		),
 		array(
 			'keys'        => __( 'Escape', 'elodin-recently-edited' ),

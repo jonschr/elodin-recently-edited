@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.0 - 2026-07-21
+- Restored native Backspace behavior inside the retained search field, placed the caret at the end when reopening, and added an explicit clear button.
+- Changed every post-type view and the combined All view to sort by last modified time, with starred items as the only priority exception.
+- Added clearer Starred and Recently edited sections, compact relative edit times, and more accurate Move to Trash language.
+- Added a separately cached, lazy-loaded Media grid with filename-first copying, previews, URL copying, editing, and media-specific search.
+- Added accessible live announcements for clipboard feedback and refreshed cache schemas for the new menu structure.
+- Fixed intermittent left/right content-type navigation caused by incomplete open-state detection and duplicate key handling while search was focused.
+- Made all four arrow keys navigate the selected Media item spatially while the Media grid is active.
+- Switched Media previews from WordPress's square-cropped thumbnail rendition to the proportional medium rendition.
+- Kept Media in content-type navigation mode until Down or a direct click explicitly selects a file; Up from the first grid row returns to content-type navigation.
+- Expanded Media to a five-column desktop grid with smaller previews and a viewport-aware height of roughly 80%, while keeping vertical keyboard movement aligned to responsive column counts.
+
 ## 1.6.1 - 2026-06-13
 - Hardened the Recently Edited search field typography so entered text and placeholder text keep a consistent font size across front-end and backend admin-bar contexts, regardless of theme styles.
 

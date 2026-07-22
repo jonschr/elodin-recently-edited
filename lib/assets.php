@@ -60,14 +60,26 @@ function elodin_recently_edited_enqueue_assets() {
 			'nonceSlug'     => $nonce_slug,
 			'nonceCache'    => $nonce_cache,
 			'menuRestUrl'   => esc_url_raw( rest_url( 'elodin-recently-edited/v1/menu' ) ),
+			'mediaRestUrl'  => esc_url_raw( rest_url( 'elodin-recently-edited/v1/media' ) ),
 			'restNonce'     => wp_create_nonce( 'wp_rest' ),
 			'currentPostType' => function_exists( 'elodin_recently_edited_get_current_post_type' ) ? elodin_recently_edited_get_current_post_type() : '',
 			'currentPostId'   => $current_post_id,
 			'currentEditUrl'  => $current_edit_url ? esc_url_raw( $current_edit_url ) : '',
 			'currentViewUrl'  => $current_view_url ? esc_url_raw( $current_view_url ) : '',
 			'isAdmin'         => is_admin(),
-			'cacheKey'        => 'elodin_recently_edited_menu_' . md5( home_url() ),
+			'cacheKey'        => 'elodin_recently_edited_menu_' . md5( home_url() ) . '_' . ELODIN_RECENTLY_EDITED_VERSION,
 			'cacheSchema'     => function_exists( 'elodin_recently_edited_get_client_menu_cache_version' ) ? elodin_recently_edited_get_client_menu_cache_version() : 1,
+			'strings'         => array(
+				'copied'             => __( 'Copied', 'elodin-recently-edited' ),
+				'copiedFilename'     => __( 'Copied filename', 'elodin-recently-edited' ),
+				'copiedUrl'          => __( 'Copied URL', 'elodin-recently-edited' ),
+				'loadingMedia'       => __( 'Loading media...', 'elodin-recently-edited' ),
+				'unableToLoadMedia'  => __( 'Unable to load media.', 'elodin-recently-edited' ),
+				'noMediaMatches'     => __( 'No media matches found.', 'elodin-recently-edited' ),
+				'moveToTrashConfirm' => __( 'Move "%s" to the Trash?', 'elodin-recently-edited' ),
+				'starred'            => __( 'Starred', 'elodin-recently-edited' ),
+				'recentlyEdited'     => __( 'Recently edited', 'elodin-recently-edited' ),
+			),
 		)
 	);
 

@@ -373,12 +373,13 @@ function elodin_recently_edited_get_global_menu_cache_key( $is_admin_context = n
 		wp_json_encode(
 			array(
 				'version'   => ELODIN_RECENTLY_EDITED_VERSION,
-				'schema'    => 3,
+				'schema'    => 4,
 				'statuses'  => elodin_recently_edited_get_menu_post_statuses(),
 				'limit'     => elodin_recently_edited_get_menu_item_limit(),
 				'is_admin'  => (bool) $is_admin_context,
 				'posttypes' => array_keys( elodin_recently_edited_get_switchable_post_types() ),
 				'gf'        => elodin_recently_edited_is_gravity_forms_available(),
+				'media'     => current_user_can( 'upload_files' ),
 			)
 		)
 	);
@@ -513,8 +514,8 @@ function elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_pos
 /**
  * Sort cached row fragments so pinned rows appear first.
  *
- * Pinned rows are sorted by modified date descending, while unpinned rows keep
- * their existing cache order.
+ * Pinned rows appear first and both sections are sorted by modified date
+ * descending. This keeps every content-type view faithful to "Recently Edited".
  *
  * @since 1.5.0
  *
@@ -523,7 +524,7 @@ function elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_pos
  * @return array Sorted row HTML fragments.
  */
 function elodin_recently_edited_sort_cached_rows_by_pins( $rows, $pinned_ids ) {
-	if ( empty( $rows ) || ! is_array( $rows ) || empty( $pinned_ids ) ) {
+	if ( empty( $rows ) || ! is_array( $rows ) ) {
 		return $rows;
 	}
 
@@ -555,7 +556,7 @@ function elodin_recently_edited_sort_cached_rows_by_pins( $rows, $pinned_ids ) {
 				return $a['pinned'] ? -1 : 1;
 			}
 
-			if ( $a['pinned'] && $a['modified'] !== $b['modified'] ) {
+			if ( $a['modified'] !== $b['modified'] ) {
 				return $a['modified'] > $b['modified'] ? -1 : 1;
 			}
 
@@ -836,9 +837,41 @@ function elodin_recently_edited_get_search_toolbar_html() {
 	}
 
 	return '<div class="elodin-recently-edited-toolbar">'
-		. '<div class="elodin-recently-edited-search"><input class="elodin-recently-edited-search-input" type="search" name="elodin_recently_edited_search" placeholder="' . esc_attr__( 'Search this site\'s content...', 'elodin-recently-edited' ) . '" aria-label="' . esc_attr__( 'Search this site\'s content', 'elodin-recently-edited' ) . '" /></div>'
+		. '<div class="elodin-recently-edited-search"><input class="elodin-recently-edited-search-input" type="search" name="elodin_recently_edited_search" placeholder="' . esc_attr__( 'Search this site\'s content...', 'elodin-recently-edited' ) . '" aria-label="' . esc_attr__( 'Search this site\'s content', 'elodin-recently-edited' ) . '" /><button type="button" class="elodin-recently-edited-search-clear" aria-label="' . esc_attr__( 'Clear search', 'elodin-recently-edited' ) . '" title="' . esc_attr__( 'Clear search', 'elodin-recently-edited' ) . '">×</button></div>'
 		. '<div class="elodin-recently-edited-toolbar-links">' . $toolbar_links . '</div>'
+		. '<span class="elodin-recently-edited-live-region screen-reader-text" aria-live="polite" aria-atomic="true"></span>'
 		. '</div>';
+}
+
+/**
+ * Format a timestamp compactly for the narrow Edited column.
+ *
+ * @since 1.7.0
+ *
+ * @param int $timestamp Unix timestamp.
+ * @return string Compact relative time or a short date for older content.
+ */
+function elodin_recently_edited_get_compact_relative_time( $timestamp ) {
+	$timestamp = intval( $timestamp );
+	if ( ! $timestamp ) {
+		return '';
+	}
+
+	$diff = abs( current_time( 'timestamp' ) - $timestamp );
+	if ( $diff < MINUTE_IN_SECONDS ) {
+		return __( 'now', 'elodin-recently-edited' );
+	}
+	if ( $diff < HOUR_IN_SECONDS ) {
+		return floor( $diff / MINUTE_IN_SECONDS ) . 'm';
+	}
+	if ( $diff < DAY_IN_SECONDS ) {
+		return floor( $diff / HOUR_IN_SECONDS ) . 'h';
+	}
+	if ( $diff < WEEK_IN_SECONDS ) {
+		return floor( $diff / DAY_IN_SECONDS ) . 'd';
+	}
+
+	return date_i18n( 'n/j/y', $timestamp );
 }
 
 /**
@@ -1102,7 +1135,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 		'pending' => esc_html__( 'Pending', 'elodin-recently-edited' ),
 		'private' => esc_html__( 'Private', 'elodin-recently-edited' ),
 		'publish' => esc_html__( 'Published', 'elodin-recently-edited' ),
-		'delete'  => esc_html__( 'Delete', 'elodin-recently-edited' ),
+		'delete'  => esc_html__( 'Move to Trash', 'elodin-recently-edited' ),
 	);
 	foreach ( $status_labels as $value => $label ) {
 		$selected        = $post->post_status === $value ? ' selected' : '';
@@ -1131,7 +1164,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	$published_raw = get_post_time( 'U', false, $post );
 	$modified_raw  = get_post_modified_time( 'U', false, $post );
 	$published     = $published_raw ? date_i18n( $date_format, $published_raw ) : '';
-	$modified      = $modified_raw ? date_i18n( $date_format, $modified_raw ) : '';
+	$modified      = $modified_raw ? elodin_recently_edited_get_compact_relative_time( $modified_raw ) : '';
 	$author_name   = '';
 	$editor_name   = '';
 
@@ -1152,7 +1185,9 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	if ( $author_name ) {
 		$published_title .= ': ' . $author_name;
 	}
-	$modified_title = __( 'Last edited', 'elodin-recently-edited' );
+	$modified_title = $modified_raw
+		? sprintf( __( 'Last edited: %s', 'elodin-recently-edited' ), date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $modified_raw ) )
+		: __( 'Last edited', 'elodin-recently-edited' );
 	if ( $editor_name ) {
 		$modified_title .= ': ' . $editor_name;
 	}
@@ -1164,19 +1199,19 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 	}
 
 	return '<span class="' . esc_attr( $row_class ) . '" data-related-group="' . esc_attr( $group ) . '" data-post-type="' . esc_attr( $post->post_type ) . '" data-modified="' . intval( $modified_raw ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
-		. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" title="' . esc_attr__( 'Pin', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
+		. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" role="button" tabindex="0" aria-label="' . esc_attr__( 'Star or unstar this item', 'elodin-recently-edited' ) . '" title="' . esc_attr__( 'Star or unstar this item', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
 		. '<span class="elodin-recently-edited-title">'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '"' . $title_new_tab_attr . ' data-resource-type="post" data-resource-id="' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '">' . $title . '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '"' . $title_new_tab_attr . ' data-resource-type="post" data-resource-id="' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '" role="link" tabindex="0">' . $title . '</span>'
 		. '</span>'
 		. '<span class="elodin-recently-edited-slug">'
-		. '<span class="elodin-recently-edited-slug-text" data-post-id="' . intval( $post->ID ) . '" data-full-slug="' . esc_attr( $post->post_name ) . '" data-copy-text="' . esc_url( $copy_url ) . '">' . $slug . '</span>'
+		. '<span class="elodin-recently-edited-slug-text" data-post-id="' . intval( $post->ID ) . '" data-full-slug="' . esc_attr( $post->post_name ) . '" data-copy-text="' . esc_url( $copy_url ) . '" role="button" tabindex="0">' . $slug . '</span>'
 		. '</span>'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '"' . $edit_new_tab_attr . '>' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
-		. '<select class="elodin-recently-edited-status-select" name="elodin_recently_edited_status_' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $edit_url ) . '"' . $edit_new_tab_attr . ' role="link" tabindex="0">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
+		. '<select class="elodin-recently-edited-status-select" name="elodin_recently_edited_status_' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-post-title="' . esc_attr( $post->post_title ) . '" data-original="' . esc_attr( $post->post_status ) . '">' . $status_options . '</select>'
 		. '<select class="elodin-recently-edited-post-type-select" name="elodin_recently_edited_post_type_' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-original="' . esc_attr( $post->post_type ) . '">' . $post_type_options_html . '</select>'
 		. '<span class="elodin-recently-edited-published" title="' . esc_attr( $published_title ) . '">' . esc_html( $published ) . '</span>'
 		. '<span class="elodin-recently-edited-modified" title="' . esc_attr( $modified_title ) . '">' . esc_html( $modified ) . '</span>'
-		. '<span class="elodin-recently-edited-id" data-id="' . intval( $post->ID ) . '">' . intval( $post->ID ) . '</span>'
+		. '<span class="elodin-recently-edited-id" data-id="' . intval( $post->ID ) . '" role="button" tabindex="0" aria-label="' . esc_attr__( 'Copy ID', 'elodin-recently-edited' ) . '">' . intval( $post->ID ) . '</span>'
 		. '</span>';
 }
 
@@ -1199,10 +1234,10 @@ function elodin_recently_edited_get_gravity_form_row( $form_item, $group = 'grav
 	$full_title  = isset( $form_item['title'] ) ? (string) $form_item['title'] : '';
 	$is_active   = ! empty( $form_item['is_active'] );
 	$created_raw = ! empty( $form_item['date_created'] ) ? strtotime( $form_item['date_created'] ) : 0;
-	$updated_raw = ! empty( $form_item['date_updated'] ) ? strtotime( $form_item['date_updated'] ) : 0;
+	$updated_raw = ! empty( $form_item['date_updated'] ) ? strtotime( $form_item['date_updated'] ) : $created_raw;
 	$date_format = 'n/j/y';
 	$created     = $created_raw ? date_i18n( $date_format, $created_raw ) : '';
-	$updated     = $updated_raw ? date_i18n( $date_format, $updated_raw ) : '';
+	$updated     = $updated_raw ? elodin_recently_edited_get_compact_relative_time( $updated_raw ) : '';
 	$search_text = trim( wp_strip_all_tags( $full_title ) . ' ' . $id );
 	$status      = $is_active ? 'active' : 'inactive';
 	$can_edit    = function_exists( 'elodin_recently_edited_can_edit_gravity_forms' )
@@ -1225,20 +1260,20 @@ function elodin_recently_edited_get_gravity_form_row( $form_item, $group = 'grav
 		: '<span class="elodin-recently-edited-status-label">' . esc_html( $status_labels[ $status ] ) . '</span>';
 	$shortcode = '[gravityform id=' . intval( $id ) . ' title=false description=false ajax=true]';
 
-	return '<span class="elodin-recently-edited-row elodin-recently-edited-row--gravity-form" data-related-group="' . esc_attr( $group ) . '" data-post-type="gravity_forms" data-search-text="' . esc_attr( $search_text ) . '">'
+	return '<span class="elodin-recently-edited-row elodin-recently-edited-row--gravity-form" data-related-group="' . esc_attr( $group ) . '" data-post-type="gravity_forms" data-modified="' . intval( $updated_raw ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
 		. '<span></span>'
 		. '<span class="' . esc_attr( $title_class ) . '">'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $form_item['view_url'] ) . '" data-new-tab="true" data-resource-type="gravity_form" data-resource-id="' . intval( $id ) . '" data-full-title="' . esc_attr( $full_title ) . '">' . $title . '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $form_item['view_url'] ) . '" data-new-tab="true" data-resource-type="gravity_form" data-resource-id="' . intval( $id ) . '" data-full-title="' . esc_attr( $full_title ) . '" role="link" tabindex="0">' . $title . '</span>'
 		. '</span>'
 		. '<span class="elodin-recently-edited-slug elodin-recently-edited-slug--locked">'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-form-notifications" data-url="' . esc_url( $form_item['notifications_url'] ) . '">' . esc_html__( 'Notifications', 'elodin-recently-edited' ) . '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-form-notifications" data-url="' . esc_url( $form_item['notifications_url'] ) . '" role="link" tabindex="0">' . esc_html__( 'Notifications', 'elodin-recently-edited' ) . '</span>'
 		. '</span>'
-		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $form_item['edit_url'] ) . '">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
+		. '<span class="elodin-recently-edited-action elodin-recently-edited-edit" data-url="' . esc_url( $form_item['edit_url'] ) . '" role="link" tabindex="0">' . esc_html__( 'Edit', 'elodin-recently-edited' ) . '</span>'
 		. $status_html
 		. '<span class="elodin-recently-edited-post-type-label">' . esc_html__( 'Form', 'elodin-recently-edited' ) . '</span>'
 		. '<span class="elodin-recently-edited-published" title="' . esc_attr__( 'Created', 'elodin-recently-edited' ) . '">' . esc_html( $created ) . '</span>'
-		. '<span class="elodin-recently-edited-modified" title="' . esc_attr__( 'Last updated', 'elodin-recently-edited' ) . '">' . esc_html( $updated ) . '</span>'
-		. '<span class="elodin-recently-edited-id" data-id="' . intval( $id ) . '" data-copy-text="' . esc_attr( $shortcode ) . '">' . intval( $id ) . '</span>'
+		. '<span class="elodin-recently-edited-modified" title="' . esc_attr( $updated_raw ? sprintf( __( 'Last updated: %s', 'elodin-recently-edited' ), date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $updated_raw ) ) : __( 'Last updated', 'elodin-recently-edited' ) ) . '">' . esc_html( $updated ) . '</span>'
+		. '<span class="elodin-recently-edited-id" data-id="' . intval( $id ) . '" data-copy-text="' . esc_attr( $shortcode ) . '" role="button" tabindex="0" aria-label="' . esc_attr__( 'Copy shortcode', 'elodin-recently-edited' ) . '">' . intval( $id ) . '</span>'
 		. '</span>';
 }
 
@@ -1786,10 +1821,8 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 					'post_type'      => $pt_slug,
 					'post_status'    => $menu_post_statuses,
 					'posts_per_page' => $menu_item_limit,
-					'orderby'        => array(
-						'menu_order' => 'ASC',
-						'modified'   => 'DESC',
-					),
+					'orderby'        => 'modified',
+					'order'          => 'DESC',
 				),
 			)
 		);
@@ -1813,6 +1846,12 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	$available_groups       = array_merge( array( 'all' ), array_keys( $type_groups ) );
 	if ( $gravity_forms_count ) {
 		$available_groups[] = 'gravity_forms';
+	}
+	$media_count = 0;
+	if ( current_user_can( 'upload_files' ) ) {
+		$attachment_counts = wp_count_posts( 'attachment' );
+		$media_count       = isset( $attachment_counts->inherit ) ? intval( $attachment_counts->inherit ) : 0;
+		$available_groups[] = 'media';
 	}
 	$active_group           = ( isset( $type_groups[ $current_post_type ] ) || ( 'gravity_forms' === $current_post_type && $gravity_forms_count ) ) ? $current_post_type : 'all';
 	$all_count              = array_sum( wp_list_pluck( $type_groups, 'count' ) ) + $gravity_forms_count;
@@ -1844,6 +1883,10 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		}
 
 		$post_type_links[] = '<a class="' . esc_attr( $type_classes ) . '" href="' . esc_url( admin_url( 'admin.php?page=gf_edit_forms' ) ) . '" data-related-target="gravity_forms" title="' . esc_attr__( 'Gravity Forms', 'elodin-recently-edited' ) . '">' . esc_html__( 'Forms', 'elodin-recently-edited' ) . '<span class="elodin-related-pill-count">' . number_format_i18n( $gravity_forms_count ) . '</span></a>';
+	}
+
+	if ( current_user_can( 'upload_files' ) ) {
+		$post_type_links[] = '<a class="elodin-related-pill elodin-related-pill--media" href="' . esc_url( admin_url( 'upload.php' ) ) . '" data-related-target="media" title="' . esc_attr__( 'Media library', 'elodin-recently-edited' ) . '">' . esc_html__( 'Media', 'elodin-recently-edited' ) . '<span class="elodin-related-pill-count">' . number_format_i18n( $media_count ) . '</span></a>';
 	}
 
 	$wp_admin_bar->add_menu(
@@ -1943,6 +1986,101 @@ function elodin_recently_edited_register_rest_routes() {
 			},
 		)
 	);
+
+	register_rest_route(
+		'elodin-recently-edited/v1',
+		'/media',
+		array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => 'elodin_recently_edited_rest_get_media',
+			'permission_callback' => function () {
+				return is_user_logged_in() && current_user_can( 'upload_files' ) && elodin_recently_edited_runtime_enabled();
+			},
+		)
+	);
+}
+
+/**
+ * Get recently modified media for the separate Media grid.
+ *
+ * The response is cached independently from the post-row index and keyed to
+ * the current user because attachment edit capabilities can vary by user.
+ *
+ * @since 1.7.0
+ *
+ * @return WP_REST_Response
+ */
+function elodin_recently_edited_rest_get_media() {
+	$user_id   = get_current_user_id();
+	$cache_key = 'elodin_recently_edited_media_v2_' . $user_id . '_' . elodin_recently_edited_get_client_menu_cache_version();
+	$cached    = get_transient( $cache_key );
+
+	if ( is_array( $cached ) ) {
+		return rest_ensure_response( $cached );
+	}
+
+	$limit = max( 1, intval( apply_filters( 'elodin_recently_edited_media_item_limit', 100 ) ) );
+	$attachments = get_posts(
+		array(
+			'post_type'              => 'attachment',
+			'post_status'            => 'inherit',
+			'posts_per_page'         => $limit,
+			'orderby'                => 'modified',
+			'order'                  => 'DESC',
+			'no_found_rows'          => true,
+			'ignore_sticky_posts'    => true,
+			'update_post_term_cache' => false,
+		)
+	);
+
+	$items = array();
+	foreach ( $attachments as $attachment ) {
+		if ( ! $attachment instanceof WP_Post || ! current_user_can( 'edit_post', $attachment->ID ) ) {
+			continue;
+		}
+
+		$url = wp_get_attachment_url( $attachment->ID );
+		if ( ! $url ) {
+			continue;
+		}
+
+		$file_path = get_attached_file( $attachment->ID );
+		$url_path  = wp_parse_url( $url, PHP_URL_PATH );
+		$filename  = $file_path ? wp_basename( $file_path ) : wp_basename( (string) $url_path );
+		$metadata  = wp_get_attachment_metadata( $attachment->ID );
+		$modified  = get_post_modified_time( 'U', false, $attachment );
+		// Use a proportional rendition. The standard thumbnail size is commonly
+		// hard-cropped to a square before CSS ever receives it.
+		$thumbnail = wp_get_attachment_image_url( $attachment->ID, 'medium' );
+		if ( ! $thumbnail ) {
+			$thumbnail = wp_mime_type_icon( $attachment->ID );
+		}
+
+		$items[] = array(
+			'id'          => intval( $attachment->ID ),
+			'title'       => '' !== trim( $attachment->post_title ) ? $attachment->post_title : $filename,
+			'filename'    => $filename,
+			'alt'         => (string) get_post_meta( $attachment->ID, '_wp_attachment_image_alt', true ),
+			'caption'     => (string) $attachment->post_excerpt,
+			'mimeType'    => (string) get_post_mime_type( $attachment->ID ),
+			'width'       => is_array( $metadata ) && isset( $metadata['width'] ) ? intval( $metadata['width'] ) : 0,
+			'height'      => is_array( $metadata ) && isset( $metadata['height'] ) ? intval( $metadata['height'] ) : 0,
+			'modified'    => intval( $modified ),
+			'modifiedAgo' => elodin_recently_edited_get_compact_relative_time( $modified ),
+			'modifiedAt'  => $modified ? date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $modified ) : '',
+			'thumbnail'   => esc_url_raw( $thumbnail ),
+			'url'         => esc_url_raw( $url ),
+			'editUrl'     => esc_url_raw( get_edit_post_link( $attachment->ID, 'raw' ) ),
+		);
+	}
+
+	$response = array(
+		'items' => $items,
+		'limit' => $limit,
+	);
+	set_transient( $cache_key, $response, 10 * MINUTE_IN_SECONDS );
+
+	return rest_ensure_response( $response );
 }
 
 /**
