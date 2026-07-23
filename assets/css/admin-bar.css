@@ -1,6 +1,6 @@
 #wp-admin-bar-recently-edited {
-	--elodin-recently-edited-menu-width: 860px;
-	--elodin-recently-edited-columns: 18px minmax(220px, 280px) minmax(140px, 180px) 34px 58px 72px 46px 46px 42px;
+	--elodin-recently-edited-menu-width: 880px;
+	--elodin-recently-edited-columns: 38px minmax(220px, 280px) minmax(140px, 180px) 34px 58px 72px 46px 46px 42px 20px;
 
 	.ab-submenu {
 		min-width: var(--elodin-recently-edited-menu-width);
@@ -717,6 +717,13 @@
 		text-align: right;
 	}
 
+	.elodin-recently-edited-row-end-action {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		min-width: 0;
+	}
+
 	.elodin-recently-edited-post-list {
 		width: 100%;
 		max-height: 320px;
@@ -1036,5 +1043,477 @@
 @media (max-width: 700px) {
 	#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-media-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
+}
+
+/* Row markers: personal star plus the optional review workflow. */
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-row-markers {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: flex-start !important;
+	gap: 4px !important;
+	width: 38px !important;
+	height: 22px !important;
+	min-width: 0 !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-review-status {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	flex: 0 0 16px !important;
+	box-sizing: border-box !important;
+	width: 16px !important;
+	height: 20px !important;
+	min-width: 16px !important;
+	min-height: 20px !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 3px !important;
+	background: transparent !important;
+	appearance: none !important;
+	-webkit-appearance: none !important;
+	cursor: pointer !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-review-status:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-review-status:focus {
+	background: rgba(255, 255, 255, 0.1) !important;
+	box-shadow: none !important;
+	outline: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-review-dot {
+	display: block !important;
+	box-sizing: border-box !important;
+	width: 11px !important;
+	height: 11px !important;
+	border: 1px solid rgba(255, 255, 255, 0.48) !important;
+	border-radius: 50% !important;
+	background: transparent !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-review-status:not(.is-blank) .elodin-recently-edited-review-dot {
+	border-color: var(--elodin-review-color, #737c89) !important;
+	background: var(--elodin-review-color, #737c89) !important;
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18) !important;
+}
+
+/* Theme-proof CSS magnifier. No icon font is required on front-end pages. */
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-trigger {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	flex: 0 0 18px !important;
+	box-sizing: border-box !important;
+	width: 18px !important;
+	height: 18px !important;
+	min-width: 18px !important;
+	min-height: 18px !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 3px !important;
+	background: transparent !important;
+	background-image: none !important;
+	box-shadow: none !important;
+	color: rgba(255, 255, 255, 0.55) !important;
+	font: inherit !important;
+	line-height: 1 !important;
+	text-indent: 0 !important;
+	appearance: none !important;
+	-webkit-appearance: none !important;
+	cursor: pointer !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-trigger:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-trigger:focus {
+	background: rgba(255, 255, 255, 0.1) !important;
+	color: #fff !important;
+	outline: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-trigger-icon {
+	position: relative !important;
+	display: block !important;
+	box-sizing: border-box !important;
+	width: 9px !important;
+	height: 9px !important;
+	border: 1.5px solid currentColor !important;
+	border-radius: 50% !important;
+	background: transparent !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-trigger-icon::after {
+	content: "" !important;
+	position: absolute !important;
+	right: -4px !important;
+	bottom: -3px !important;
+	width: 5px !important;
+	height: 1.5px !important;
+	border-radius: 2px !important;
+	background: currentColor !important;
+	transform: rotate(45deg) !important;
+	transform-origin: left center !important;
+}
+
+/* Full in-menu Meta Inspector. */
+#wpadminbar #wp-admin-bar-recently-edited > .ab-sub-wrapper > .elodin-recently-edited-meta-inspector {
+	display: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited.elodin-recently-edited-meta-view > .ab-sub-wrapper > .ab-submenu {
+	display: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited.elodin-recently-edited-meta-view > .ab-sub-wrapper > .elodin-recently-edited-meta-inspector {
+	display: flex !important;
+	flex-direction: column !important;
+	box-sizing: border-box !important;
+	width: var(--elodin-recently-edited-menu-width) !important;
+	max-width: calc(100vw - 16px) !important;
+	height: auto !important;
+	min-height: 0 !important;
+	max-height: 80vh !important;
+	border: 0 !important;
+	background: #1f2328 !important;
+	color: #fff !important;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-header {
+	display: grid !important;
+	grid-template-columns: auto minmax(0, 1fr) minmax(210px, 320px) !important;
+	align-items: center !important;
+	gap: 12px !important;
+	box-sizing: border-box !important;
+	padding: 10px 12px !important;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.11) !important;
+	background: rgba(255, 255, 255, 0.035) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-back,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-copy-key,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-copy-value,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-load-full {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	box-sizing: border-box !important;
+	width: auto !important;
+	height: 26px !important;
+	min-height: 26px !important;
+	padding: 4px 8px !important;
+	border: 1px solid rgba(255, 255, 255, 0.18) !important;
+	border-radius: 4px !important;
+	background: rgba(255, 255, 255, 0.06) !important;
+	color: rgba(255, 255, 255, 0.78) !important;
+	font-size: 11px !important;
+	line-height: 1 !important;
+	text-indent: 0 !important;
+	cursor: pointer !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-back:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-back:focus,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-copy-key:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-copy-key:focus,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-copy-value:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-copy-value:focus,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-load-full:hover,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-load-full:focus {
+	border-color: rgba(244, 197, 66, 0.72) !important;
+	background: rgba(244, 197, 66, 0.12) !important;
+	color: #fff !important;
+	outline: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-heading {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: baseline !important;
+	gap: 7px !important;
+	min-width: 0 !important;
+	line-height: 1.25 !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-heading strong {
+	color: #fff !important;
+	font-size: 13px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-heading span {
+	overflow: hidden !important;
+	color: rgba(255, 255, 255, 0.55) !important;
+	font-size: 11px !important;
+	text-overflow: ellipsis !important;
+	white-space: nowrap !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-heading span::before {
+	content: "•" !important;
+	margin-right: 7px !important;
+	color: rgba(255, 255, 255, 0.32) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-search {
+	appearance: none !important;
+	-webkit-appearance: none !important;
+	box-sizing: border-box !important;
+	width: 100% !important;
+	height: 30px !important;
+	min-height: 30px !important;
+	margin: 0 !important;
+	padding: 5px 9px !important;
+	border: 1px solid rgba(255, 255, 255, 0.2) !important;
+	border-radius: 4px !important;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.055)),
+		rgba(10, 14, 18, 0.42) !important;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
+		0 1px 1px rgba(0, 0, 0, 0.16) !important;
+	color: #fff !important;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
+	font-size: 12px !important;
+	font-style: normal !important;
+	font-weight: 400 !important;
+	line-height: 18px !important;
+	letter-spacing: 0 !important;
+	transition:
+		background 140ms ease,
+		border-color 140ms ease,
+		box-shadow 140ms ease !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-search::placeholder {
+	color: rgba(255, 255, 255, 0.52) !important;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
+	font-size: 12px !important;
+	font-style: normal !important;
+	font-weight: 400 !important;
+	line-height: 18px !important;
+	letter-spacing: 0 !important;
+	opacity: 1 !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-search:focus {
+	border-color: rgba(244, 197, 66, 0.48) !important;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.075)),
+		rgba(13, 18, 23, 0.56) !important;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.1),
+		0 0 0 2px rgba(244, 197, 66, 0.12),
+		0 1px 2px rgba(0, 0, 0, 0.2) !important;
+	outline: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-search::-webkit-search-decoration,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-search::-webkit-search-cancel-button,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-search::-webkit-search-results-button,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-search::-webkit-search-results-decoration {
+	-webkit-appearance: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-summary {
+	box-sizing: border-box !important;
+	padding: 6px 12px !important;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.07) !important;
+	color: rgba(255, 255, 255, 0.5) !important;
+	font-size: 10px !important;
+	line-height: 1.3 !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-list {
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	max-height: calc(80vh - 104px) !important;
+	overflow: auto !important;
+	padding: 8px 12px !important;
+	scrollbar-color: rgba(255, 255, 255, 0.24) transparent !important;
+	scrollbar-width: thin !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-item {
+	box-sizing: border-box !important;
+	margin: 0 0 8px !important;
+	padding: 9px !important;
+	border: 1px solid rgba(255, 255, 255, 0.09) !important;
+	border-radius: 5px !important;
+	background: rgba(255, 255, 255, 0.035) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-item-header {
+	display: flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+	min-width: 0 !important;
+	margin: 0 0 7px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-item-header code {
+	display: block !important;
+	min-width: 0 !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	background-color: transparent !important;
+	box-shadow: none !important;
+	overflow: hidden !important;
+	color: #f4c542 !important;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+	font-size: 12px !important;
+	line-height: 1.3 !important;
+	text-decoration: none !important;
+	text-overflow: ellipsis !important;
+	white-space: nowrap !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-count {
+	margin-right: auto !important;
+	color: rgba(255, 255, 255, 0.42) !important;
+	font-size: 9px !important;
+	white-space: nowrap !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-value {
+	position: relative !important;
+	margin-top: 6px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-value-type,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-details summary {
+	color: rgba(255, 255, 255, 0.48) !important;
+	font-size: 9px !important;
+	line-height: 1.3 !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-details summary {
+	cursor: pointer !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-value pre {
+	box-sizing: border-box !important;
+	max-height: 260px !important;
+	margin: 4px 0 0 !important;
+	overflow: auto !important;
+	padding: 7px !important;
+	border-radius: 4px !important;
+	background: rgba(0, 0, 0, 0.24) !important;
+	color: rgba(255, 255, 255, 0.82) !important;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+	font-size: 10px !important;
+	line-height: 1.45 !important;
+	white-space: pre-wrap !important;
+	word-break: break-word !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-value.is-redacted pre {
+	color: #ffb4ae !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-value-actions {
+	display: flex !important;
+	align-items: center !important;
+	gap: 6px !important;
+	margin-top: 5px !important;
+	color: rgba(255, 255, 255, 0.42) !important;
+	font-size: 9px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-empty {
+	padding: 24px 12px !important;
+	color: rgba(255, 255, 255, 0.55) !important;
+	font-size: 12px !important;
+	text-align: center !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-footer {
+	box-sizing: border-box !important;
+	padding: 7px 12px !important;
+	border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+	color: rgba(255, 255, 255, 0.38) !important;
+	font-size: 9px !important;
+	line-height: 1.3 !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-item.is-compact {
+	display: grid !important;
+	grid-template-columns: minmax(150px, 220px) 72px minmax(80px, 1fr) auto auto !important;
+	align-items: center !important;
+	gap: 8px !important;
+	min-height: 34px !important;
+	margin-bottom: 4px !important;
+	padding: 5px 7px !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-compact-key,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-compact-value {
+	display: block !important;
+	min-width: 0 !important;
+	overflow: hidden !important;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+	font-size: 10px !important;
+	line-height: 22px !important;
+	text-overflow: ellipsis !important;
+	white-space: nowrap !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-compact-key {
+	color: #f4c542 !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-compact-value {
+	box-sizing: border-box !important;
+	padding: 0 6px !important;
+	border-radius: 3px !important;
+	background: rgba(0, 0, 0, 0.22) !important;
+	color: rgba(255, 255, 255, 0.84) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-item.is-compact.is-redacted .elodin-recently-edited-meta-compact-value {
+	color: #ffb4ae !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-compact-type {
+	overflow: hidden !important;
+	color: rgba(255, 255, 255, 0.43) !important;
+	font-size: 9px !important;
+	line-height: 1 !important;
+	text-overflow: ellipsis !important;
+	white-space: nowrap !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-item.is-compact .elodin-recently-edited-meta-copy-key,
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-item.is-compact .elodin-recently-edited-meta-copy-value {
+	height: 22px !important;
+	min-height: 22px !important;
+	padding: 3px 6px !important;
+	font-size: 9px !important;
+}
+
+@media (max-width: 700px) {
+	#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-header {
+		grid-template-columns: auto minmax(0, 1fr) !important;
+	}
+
+	#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-search {
+		grid-column: 1 / -1 !important;
+	}
+
+	#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-item.is-compact {
+		grid-template-columns: minmax(110px, 1fr) 64px auto auto !important;
+	}
+
+	#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-compact-value {
+		grid-column: 1 / -1 !important;
+		grid-row: 2 !important;
 	}
 }

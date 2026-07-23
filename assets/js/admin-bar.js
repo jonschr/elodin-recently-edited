@@ -13,8 +13,13 @@ jQuery(function ($) {
 	var menuLoadRequest = null;
 	var mediaLoadRequest = null;
 	var mediaItems = [];
+	var metaInspectorCache = {};
+	var metaInspectorFullKeys = {};
+	var metaInspectorRequest = null;
+	var metaInspectorTrigger = null;
 	var shellRevealTimer = null;
 	var shellRevealDelayMs = 700;
+	var editorSaveRefreshTimer = null;
 	var rowIndex = null;
 	var isMac = /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || '');
 
@@ -235,6 +240,7 @@ jQuery(function ($) {
 		replaceAdminBarNode('recently-edited-column-header', nodes.columnHeader.title);
 		replaceAdminBarNode('recently-edited-post-list', nodes.postList.title);
 		invalidateRowIndex();
+		reconcileReviewControls($menu);
 		updateSearchPlaceholder();
 		updateCurrentRowHighlight($menu);
 
@@ -397,6 +403,15 @@ jQuery(function ($) {
 					throw new Error('Missing Recently Edited menu nodes.');
 				}
 
+				var responseCacheSchema = parseInt(response.cacheSchema || 0, 10);
+				if (
+					responseCacheSchema &&
+					responseCacheSchema !== parseInt(ElodinRecentlyEdited.cacheSchema || 1, 10)
+				) {
+					clearClientMenuCache();
+					ElodinRecentlyEdited.cacheSchema = responseCacheSchema;
+				}
+
 				writeClientMenuCache(nodes);
 				hydrateRecentlyEditedMenu(nodes);
 			})
@@ -412,6 +427,112 @@ jQuery(function ($) {
 			});
 
 		return menuLoadRequest;
+	}
+
+	/**
+	 * Refresh the already-rendered menu after a successful block-editor save.
+	 *
+	 * Preserve the user's active content type and search while replacing the
+	 * row index with the freshly sorted server response.
+	 */
+	function refreshRecentlyEditedMenuAfterSave() {
+		if (editorSaveRefreshTimer) {
+			window.clearTimeout(editorSaveRefreshTimer);
+		}
+
+		editorSaveRefreshTimer = window.setTimeout(function () {
+			editorSaveRefreshTimer = null;
+
+			if (menuLoadRequest) {
+				menuLoadRequest.always(refreshRecentlyEditedMenuAfterSave);
+				return;
+			}
+
+			var $menu = $('#wp-admin-bar-recently-edited');
+			if (!$menu.length) {
+				return;
+			}
+
+			$menu.data('restoreGroup', getActiveGroup($menu));
+			$menu.data(
+				'restoreSearch',
+				String($menu.find('.elodin-recently-edited-search-input').first().val() || ''),
+			);
+			saveScrollPosition($menu.attr('id'));
+			clearClientMenuCache();
+			loadRecentlyEditedMenu({ force: true });
+		}, 100);
+	}
+
+	/**
+	 * Watch Gutenberg's editor store for completed manual saves.
+	 *
+	 * Autosaves are revisions and intentionally do not reorder Recently Edited.
+	 */
+	function watchBlockEditorSaves() {
+		if (
+			!ElodinRecentlyEdited.isAdmin ||
+			!window.wp ||
+			!window.wp.data ||
+			typeof window.wp.data.select !== 'function' ||
+			typeof window.wp.data.subscribe !== 'function'
+		) {
+			return;
+		}
+
+		function selectEditorStore() {
+			try {
+				return window.wp.data.select('core/editor');
+			} catch (error) {
+				return null;
+			}
+		}
+
+		var editor = selectEditorStore();
+		if (!editor || typeof editor.isSavingPost !== 'function') {
+			return;
+		}
+
+		var wasSaving = Boolean(editor.isSavingPost());
+		var saveWasAutosave =
+			wasSaving &&
+			typeof editor.isAutosavingPost === 'function' &&
+			Boolean(editor.isAutosavingPost());
+
+		window.wp.data.subscribe(function () {
+			editor = selectEditorStore();
+			if (!editor || typeof editor.isSavingPost !== 'function') {
+				return;
+			}
+
+			var isSaving = Boolean(editor.isSavingPost());
+			var isAutosaving =
+				typeof editor.isAutosavingPost === 'function' &&
+				Boolean(editor.isAutosavingPost());
+
+			if (isSaving && !wasSaving) {
+				saveWasAutosave = isAutosaving;
+			}
+
+			if (wasSaving && !isSaving && !saveWasAutosave) {
+				var saveSucceeded =
+					typeof editor.didPostSaveRequestSucceed !== 'function' ||
+					Boolean(editor.didPostSaveRequestSucceed());
+				var saveError =
+					typeof editor.getLastPostSaveError === 'function'
+						? editor.getLastPostSaveError()
+						: null;
+
+				if (saveSucceeded && !saveError) {
+					refreshRecentlyEditedMenuAfterSave();
+				}
+			}
+
+			wasSaving = isSaving;
+			if (!isSaving) {
+				saveWasAutosave = false;
+			}
+		});
 	}
 
 	function readClientMediaCache() {
@@ -636,6 +757,319 @@ jQuery(function ($) {
 		return mediaLoadRequest;
 	}
 
+	function formatMetaValueSize(bytes) {
+		bytes = parseInt(bytes || 0, 10);
+		if (bytes < 1024) {
+			return bytes + ' B';
+		}
+		if (bytes < 1024 * 1024) {
+			return (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
+		}
+		return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+	}
+
+	function getMetaInspector() {
+		var $menu = $('#wp-admin-bar-recently-edited');
+		var $wrapper = $menu.children('.ab-sub-wrapper').first();
+		var $panel = $wrapper.children('.elodin-recently-edited-meta-inspector').first();
+		if (!$panel.length) {
+			$panel = $('<section>', {
+				class: 'elodin-recently-edited-meta-inspector',
+				role: 'dialog',
+				'aria-modal': 'true',
+				'aria-label': 'Post Meta Inspector',
+			}).appendTo($wrapper);
+		}
+		return $panel;
+	}
+
+	function buildMetaInspectorShell(postId, postTitle) {
+		var $panel = getMetaInspector().empty().attr('data-post-id', postId);
+		var $header = $('<header>', { class: 'elodin-recently-edited-meta-header' }).appendTo($panel);
+		$('<button>', {
+			type: 'button',
+			class: 'elodin-recently-edited-meta-back',
+			text: '← Back',
+		}).appendTo($header);
+		var $heading = $('<div>', { class: 'elodin-recently-edited-meta-heading' }).appendTo($header);
+		$('<strong>', { text: 'Meta Inspector' }).appendTo($heading);
+		$('<span>', { text: postTitle || 'Post #' + postId }).appendTo($heading);
+		$('<input>', {
+			type: 'search',
+			class: 'elodin-recently-edited-meta-search',
+			placeholder: 'Search meta keys and values...',
+			'aria-label': 'Search meta keys and values',
+		}).appendTo($header);
+		$('<div>', {
+			class: 'elodin-recently-edited-meta-summary',
+			'aria-live': 'polite',
+		}).appendTo($panel);
+		$('<div>', { class: 'elodin-recently-edited-meta-list' }).appendTo($panel);
+		$('<footer>', {
+			class: 'elodin-recently-edited-meta-footer',
+			text: 'Read only • sensitive-looking values are redacted • values are not stored in browser cache',
+		}).appendTo($panel);
+		return $panel;
+	}
+
+	function renderMetaValue($container, item, valueRecord, valueIndex, isFull) {
+		var type = String(valueRecord.type || 'string');
+		var value = String(valueRecord.value == null ? '' : valueRecord.value);
+		var structured = type === 'array' || type === 'object';
+		var $value = $('<div>', {
+			class: 'elodin-recently-edited-meta-value' + (item.redacted ? ' is-redacted' : ''),
+		}).appendTo($container);
+		var descriptor = type + ' • ' + formatMetaValueSize(valueRecord.size);
+
+		if (structured) {
+			var $details = $('<details>', { class: 'elodin-recently-edited-meta-details' }).appendTo($value);
+			$('<summary>', { text: descriptor }).appendTo($details);
+			$('<pre>', { text: value }).appendTo($details);
+		} else {
+			$('<div>', { class: 'elodin-recently-edited-meta-value-type', text: descriptor }).appendTo($value);
+			$('<pre>', { text: value }).appendTo($value);
+		}
+
+		var $actions = $('<div>', { class: 'elodin-recently-edited-meta-value-actions' }).appendTo($value);
+		if (!item.redacted && !valueRecord.truncated) {
+			$('<button>', {
+				type: 'button',
+				class: 'elodin-recently-edited-meta-copy-value',
+				text: 'Copy value',
+			})
+				.attr('data-copy-text', value)
+				.appendTo($actions);
+		}
+		if (valueRecord.truncated && !isFull) {
+			$('<button>', {
+				type: 'button',
+				class: 'elodin-recently-edited-meta-load-full',
+				text: 'Load full value',
+			})
+				.attr({ 'data-meta-key': item.key, 'data-value-index': valueIndex })
+				.appendTo($actions);
+		} else if (valueRecord.truncated) {
+			$('<span>', { text: 'Display limit reached' }).appendTo($actions);
+		}
+	}
+
+	function canRenderCompactMetaItem(item) {
+		if (!item || !Array.isArray(item.values) || item.values.length !== 1) {
+			return false;
+		}
+		var record = item.values[0];
+		return (
+			record &&
+			!record.truncated &&
+			record.type !== 'array' &&
+			record.type !== 'object'
+		);
+	}
+
+	function renderCompactMetaItem($item, item) {
+		var record = item.values[0];
+		var value = String(record.value == null ? '' : record.value);
+		$item.addClass('is-compact' + (item.redacted ? ' is-redacted' : ''));
+		$('<code>', {
+			class: 'elodin-recently-edited-meta-compact-key',
+			text: item.key,
+			title: item.key,
+		}).appendTo($item);
+		$('<span>', {
+			class: 'elodin-recently-edited-meta-compact-type',
+			text: String(record.type || 'string') + ' • ' + formatMetaValueSize(record.size),
+		}).appendTo($item);
+		$('<code>', {
+			class: 'elodin-recently-edited-meta-compact-value',
+			text: value === '' ? '""' : value,
+			title: value,
+		}).appendTo($item);
+		$('<button>', {
+			type: 'button',
+			class: 'elodin-recently-edited-meta-copy-key',
+			text: 'Copy key',
+		})
+			.attr('data-copy-text', item.key)
+			.appendTo($item);
+		if (!item.redacted) {
+			$('<button>', {
+				type: 'button',
+				class: 'elodin-recently-edited-meta-copy-value',
+				text: 'Copy value',
+			})
+				.attr('data-copy-text', value)
+				.appendTo($item);
+		}
+	}
+
+	function renderMetaInspector(response) {
+		var $panel = getMetaInspector();
+		var $list = $panel.find('.elodin-recently-edited-meta-list').empty();
+		var items = response && Array.isArray(response.items) ? response.items : [];
+		var postId = response && response.post ? response.post.id : parseInt($panel.attr('data-post-id'), 10);
+		var fullKeys = metaInspectorFullKeys[postId] || {};
+
+		items.forEach(function (item) {
+			var searchable = [item.key]
+				.concat((item.values || []).map(function (record) { return record.value || ''; }))
+				.join(' ');
+			var $item = $('<article>', {
+				class: 'elodin-recently-edited-meta-item',
+				'data-meta-key': item.key,
+				'data-search-text': normalizeSearchText(searchable),
+			}).appendTo($list);
+			if (canRenderCompactMetaItem(item)) {
+				renderCompactMetaItem($item, item);
+				return;
+			}
+			var $itemHeader = $('<div>', { class: 'elodin-recently-edited-meta-item-header' }).appendTo($item);
+			$('<code>', { text: item.key }).appendTo($itemHeader);
+			$('<span>', {
+				class: 'elodin-recently-edited-meta-count',
+				text: item.count === 1 ? '1 value' : item.count + ' values',
+			}).appendTo($itemHeader);
+			$('<button>', {
+				type: 'button',
+				class: 'elodin-recently-edited-meta-copy-key',
+				text: 'Copy key',
+			})
+				.attr('data-copy-text', item.key)
+				.appendTo($itemHeader);
+			(item.values || []).forEach(function (record, valueIndex) {
+				renderMetaValue($item, item, record, valueIndex, Boolean(fullKeys[item.key]));
+			});
+		});
+
+		$('<div>', {
+			class: 'elodin-recently-edited-meta-empty',
+			text: (ElodinRecentlyEdited.strings || {}).noMetaMatches || 'No meta keys match this search.',
+		}).toggle(items.length === 0).appendTo($list);
+		$panel.find('.elodin-recently-edited-meta-summary').text(
+			items.length === 1 ? '1 meta key' : items.length + ' meta keys',
+		);
+		filterMetaInspector($panel.find('.elodin-recently-edited-meta-search').val());
+	}
+
+	function filterMetaInspector(query) {
+		var $panel = getMetaInspector();
+		var normalized = normalizeSearchText(query);
+		var matches = 0;
+		$panel.find('.elodin-recently-edited-meta-item').each(function () {
+			var match = !normalized || String($(this).attr('data-search-text') || '').indexOf(normalized) !== -1;
+			$(this).toggle(match);
+			if (match) {
+				matches += 1;
+			}
+		});
+		$panel.find('.elodin-recently-edited-meta-empty').toggle(matches === 0);
+		$panel.find('.elodin-recently-edited-meta-summary').text(
+			matches === 1 ? '1 matching meta key' : matches + ' matching meta keys',
+		);
+	}
+
+	function requestPostMeta(postId, key) {
+		var url = String(ElodinRecentlyEdited.metaRestUrl || '') + postId + '/meta';
+		if (key) {
+			url += '?key=' + encodeURIComponent(key);
+		}
+		return $.ajax({
+			url: url,
+			method: 'GET',
+			cache: false,
+			beforeSend: function (xhr) {
+				xhr.setRequestHeader('X-WP-Nonce', ElodinRecentlyEdited.restNonce);
+			},
+		});
+	}
+
+	function openMetaInspector($trigger) {
+		var postId = parseInt($trigger.attr('data-post-id'), 10);
+		if (!postId) {
+			return;
+		}
+		var postTitle = $trigger.attr('data-post-title') || 'Post #' + postId;
+		var $menu = $('#wp-admin-bar-recently-edited');
+		metaInspectorTrigger = $trigger;
+		$menu.addClass('elodin-recently-edited-meta-view');
+		var $panel = buildMetaInspectorShell(postId, postTitle);
+		$panel.find('.elodin-recently-edited-meta-summary').text(
+			(ElodinRecentlyEdited.strings || {}).loadingMeta || 'Loading post meta...',
+		);
+		$panel.find('.elodin-recently-edited-meta-back').focus();
+
+		if (metaInspectorCache[postId]) {
+			renderMetaInspector(metaInspectorCache[postId]);
+			return;
+		}
+		if (metaInspectorRequest && typeof metaInspectorRequest.abort === 'function') {
+			metaInspectorRequest.abort();
+		}
+		metaInspectorRequest = requestPostMeta(postId)
+			.done(function (response) {
+				metaInspectorCache[postId] = response;
+				renderMetaInspector(response);
+			})
+			.fail(function (xhr, status) {
+				if (status === 'abort') {
+					return;
+				}
+				$panel.find('.elodin-recently-edited-meta-summary').text(
+					(ElodinRecentlyEdited.strings || {}).unableToLoadMeta || 'Unable to load post meta.',
+				);
+			})
+			.always(function () {
+				metaInspectorRequest = null;
+			});
+	}
+
+	function closeMetaInspector(restoreFocus) {
+		var $menu = $('#wp-admin-bar-recently-edited');
+		if (!$menu.hasClass('elodin-recently-edited-meta-view')) {
+			return false;
+		}
+		if (metaInspectorRequest && typeof metaInspectorRequest.abort === 'function') {
+			metaInspectorRequest.abort();
+			metaInspectorRequest = null;
+		}
+		$menu.removeClass('elodin-recently-edited-meta-view');
+		getMetaInspector().remove();
+		if (restoreFocus && metaInspectorTrigger && metaInspectorTrigger.length) {
+			metaInspectorTrigger.focus();
+		}
+		metaInspectorTrigger = null;
+		return true;
+	}
+
+	function loadFullMetaKey($button) {
+		var $panel = getMetaInspector();
+		var postId = parseInt($panel.attr('data-post-id'), 10);
+		var key = String($button.attr('data-meta-key') || '');
+		if (!postId || !key || $button.prop('disabled')) {
+			return;
+		}
+		$button.prop('disabled', true).text('Loading...');
+		requestPostMeta(postId, key)
+			.done(function (response) {
+				if (!response || !Array.isArray(response.items) || !response.items.length) {
+					return;
+				}
+				var cached = metaInspectorCache[postId] || { post: response.post, items: [] };
+				cached.items = (cached.items || []).map(function (item) {
+					return item.key === key ? response.items[0] : item;
+				});
+				metaInspectorCache[postId] = cached;
+				metaInspectorFullKeys[postId] = metaInspectorFullKeys[postId] || {};
+				metaInspectorFullKeys[postId][key] = true;
+				var query = $panel.find('.elodin-recently-edited-meta-search').val();
+				renderMetaInspector(cached);
+				$panel.find('.elodin-recently-edited-meta-search').val(query);
+				filterMetaInspector(query);
+			})
+			.fail(function () {
+				$button.prop('disabled', false).text('Try again');
+			});
+	}
+
 	function rebuildRecentlyEditedCache($link) {
 		var originalText = $link.text();
 
@@ -651,10 +1085,10 @@ jQuery(function ($) {
 		})
 			.done(function (response) {
 				if (response && response.success && response.data) {
+					clearClientMenuCache();
 					if (response.data.cacheSchema) {
 						ElodinRecentlyEdited.cacheSchema = response.data.cacheSchema;
 					}
-					clearClientMenuCache();
 					loadRecentlyEditedMenu({ preload: true, force: true });
 					$link.text(response.data.message || 'Cache rebuilt.');
 					return;
@@ -1225,6 +1659,9 @@ jQuery(function ($) {
 		if (!$menu.length || $menu.hasClass('elodin-recently-edited-is-lazy')) {
 			return false;
 		}
+		if ($menu.hasClass('elodin-recently-edited-meta-view')) {
+			return false;
+		}
 
 		if (
 			e.shiftKey &&
@@ -1369,6 +1806,7 @@ jQuery(function ($) {
 
 		$menu.find('.elodin-related-pill').removeClass('is-active');
 		$targetPill.addClass('is-active');
+		reconcileReviewControls($menu);
 		$menu.toggleClass('elodin-recently-edited-media-view', target === 'media');
 		if (target === 'media') {
 			setSelectedMediaCard(null);
@@ -1738,6 +2176,7 @@ jQuery(function ($) {
 				return;
 			}
 
+			closeMetaInspector(false);
 			clearKeepOpenState(menuId);
 			forceCloseMenu($menu);
 			$menu.find(':focus').trigger('blur');
@@ -1998,6 +2437,13 @@ jQuery(function ($) {
 				return;
 			}
 
+			if (closeMetaInspector(true)) {
+				e.preventDefault();
+				e.stopPropagation();
+				e.stopImmediatePropagation();
+				return;
+			}
+
 			if (!closeRecentlyEditedImmediately()) {
 				return;
 			}
@@ -2090,6 +2536,7 @@ jQuery(function ($) {
 	if (!hydrateRecentlyEditedMenuFromCache()) {
 		scheduleMenuIndexBuild();
 	}
+	watchBlockEditorSaves();
 
 	$(window).on('resize orientationchange', setPageScrollbarCompensation);
 
@@ -2175,6 +2622,163 @@ jQuery(function ($) {
 		},
 	);
 
+	function getReviewStates() {
+		return Array.isArray(ElodinRecentlyEdited.reviewStates)
+			? ElodinRecentlyEdited.reviewStates.filter(function (state) {
+				return state && state.key && state.label && state.color;
+			})
+			: [];
+	}
+
+	function getReviewStateConfig(stateKey) {
+		return getReviewStates().find(function (state) {
+			return state.key === stateKey;
+		}) || null;
+	}
+
+	function getReviewPostTypes() {
+		return Array.isArray(ElodinRecentlyEdited.reviewPostTypes)
+			? ElodinRecentlyEdited.reviewPostTypes.map(String)
+			: [];
+	}
+
+	function reconcileReviewControls($menu) {
+		$menu = $menu && $menu.length ? $menu : $('#wp-admin-bar-recently-edited');
+		var enabledTypes = getReviewPostTypes();
+		var savedStates = ElodinRecentlyEdited.reviewPostStates || {};
+		$menu.find('.elodin-recently-edited-row').each(function () {
+			var $row = $(this);
+			var postType = String($row.attr('data-post-type') || '');
+			var $markers = $row.children('.elodin-recently-edited-row-markers').first();
+			var $button = $markers.find('.elodin-recently-edited-review-status').first();
+			var postId = parseInt(
+				$row.find('.elodin-recently-edited-title-link[data-post-id]').first().attr('data-post-id') ||
+				$row.find('.elodin-recently-edited-pin[data-post-id]').first().attr('data-post-id'),
+				10,
+			);
+			var enabled = enabledTypes.indexOf(postType) !== -1 && postId > 0;
+			$row.attr('data-review-enabled', enabled ? '1' : '0');
+			if (!enabled) {
+				$button.remove();
+				return;
+			}
+			if (!$button.length) {
+				$button = $('<button>', {
+					type: 'button',
+					class: 'elodin-recently-edited-review-status is-blank',
+					'data-post-id': postId,
+				}).append($('<span>', {
+					class: 'elodin-recently-edited-review-dot',
+					'aria-hidden': 'true',
+				})).appendTo($markers);
+				updateReviewStatusAppearance($button, String(savedStates[postId] || ''));
+			}
+		});
+	}
+
+	function updateReviewStatusAppearance($button, state) {
+		var config = getReviewStateConfig(state);
+		var label = config ? config.label : 'Blank';
+		$button
+			.toggleClass('is-blank', !config)
+			.css('--elodin-review-color', config ? config.color : '')
+			.attr('data-review-state', config ? state : '')
+			.attr('aria-label', 'Review: ' + label + '. Click to cycle.')
+			.attr('title', 'Review: ' + label + '. Click to cycle.');
+	}
+
+	function saveReviewStatus($button, postId, state, persistedState) {
+		var activeRequest = $button.data('reviewSaveRequest');
+		if (activeRequest && typeof activeRequest.abort === 'function') {
+			activeRequest.abort();
+		}
+
+		var request = $.post(ElodinRecentlyEdited.ajaxUrl, {
+			action: 'elodin_recently_edited_update_review_status',
+			post_id: postId,
+			state: state,
+			nonce: ElodinRecentlyEdited.nonceReview,
+		});
+		$button.data('reviewSaveRequest', request);
+		request
+			.done(function (response) {
+				if (!response || !response.success) {
+					updateReviewStatusAppearance($button, persistedState);
+					announce((ElodinRecentlyEdited.strings || {}).reviewSaveFailed || 'Unable to save review status.');
+					return;
+				}
+				$button.data('persistedReviewState', state);
+				if (!ElodinRecentlyEdited.reviewPostStates || typeof ElodinRecentlyEdited.reviewPostStates !== 'object') {
+					ElodinRecentlyEdited.reviewPostStates = {};
+				}
+				if (state) {
+					ElodinRecentlyEdited.reviewPostStates[postId] = state;
+				} else {
+					delete ElodinRecentlyEdited.reviewPostStates[postId];
+				}
+				try {
+					window.localStorage.removeItem(getClientCacheKey());
+				} catch (error) {
+					// Browser storage may be unavailable.
+				}
+				var config = getReviewStateConfig(state);
+				announce('Review: ' + (config ? config.label : 'Blank'));
+			})
+			.fail(function (xhr, status) {
+				if (status === 'abort') {
+					return;
+				}
+				updateReviewStatusAppearance($button, persistedState);
+				announce((ElodinRecentlyEdited.strings || {}).reviewSaveFailed || 'Unable to save review status.');
+			})
+			.always(function () {
+				if ($button.data('reviewSaveRequest') === request) {
+					$button.removeData('reviewSaveRequest');
+				}
+			});
+	}
+
+	$(document).on(
+		'click',
+		'#wp-admin-bar-recently-edited .elodin-recently-edited-review-status',
+		function (e) {
+			e.preventDefault();
+			e.stopPropagation();
+			e.stopImmediatePropagation();
+			var $button = $(this);
+			var postId = parseInt($button.attr('data-post-id'), 10);
+			var states = getReviewStates();
+			if (!postId || !states.length) {
+				return;
+			}
+			var current = String($button.attr('data-review-state') || '');
+			var currentIndex = states.findIndex(function (state) { return state.key === current; });
+			var nextState = currentIndex < 0
+				? states[0].key
+				: currentIndex >= states.length - 1
+					? ''
+					: states[currentIndex + 1].key;
+			var persistedState = $button.data('persistedReviewState');
+			if (typeof persistedState !== 'string') {
+				persistedState = current;
+				$button.data('persistedReviewState', persistedState);
+			}
+			updateReviewStatusAppearance($button, nextState);
+
+			var saveTimer = $button.data('reviewSaveTimer');
+			if (saveTimer) {
+				window.clearTimeout(saveTimer);
+			}
+			$button.data(
+				'reviewSaveTimer',
+				window.setTimeout(function () {
+					$button.removeData('reviewSaveTimer');
+					saveReviewStatus($button, postId, String($button.attr('data-review-state') || ''), persistedState);
+				}, 220),
+			);
+		},
+	);
+
 	/**
 	 * Prevent clicks on select elements from triggering parent link navigation
 	 */
@@ -2241,7 +2845,7 @@ jQuery(function ($) {
 		function (e) {
 			if (
 				$(e.target).closest(
-					'.elodin-recently-edited-title-link, .elodin-recently-edited-title-input',
+					'.elodin-recently-edited-title-link, .elodin-recently-edited-title-input, .elodin-recently-edited-meta-trigger',
 				).length
 			) {
 				return;
@@ -2451,6 +3055,50 @@ jQuery(function ($) {
 			$button.attr('data-copy-text') || '',
 			(ElodinRecentlyEdited.strings || {}).copiedUrl || 'Copied URL',
 		);
+	});
+
+	$(document).on('click', '.elodin-recently-edited-meta-trigger', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		e.stopImmediatePropagation();
+		openMetaInspector($(this));
+	});
+
+	$(document).on('click', '.elodin-recently-edited-meta-back', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		closeMetaInspector(true);
+	});
+
+	$(document).on('input', '.elodin-recently-edited-meta-search', function (e) {
+		e.stopPropagation();
+		filterMetaInspector($(this).val());
+	});
+
+	$(document).on('click', '.elodin-recently-edited-meta-copy-key', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		copyTextWithFeedback(
+			$(this),
+			$(this).attr('data-copy-text') || '',
+			(ElodinRecentlyEdited.strings || {}).copiedMetaKey || 'Copied meta key',
+		);
+	});
+
+	$(document).on('click', '.elodin-recently-edited-meta-copy-value', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		copyTextWithFeedback(
+			$(this),
+			$(this).attr('data-copy-text') || '',
+			(ElodinRecentlyEdited.strings || {}).copiedMetaValue || 'Copied meta value',
+		);
+	});
+
+	$(document).on('click', '.elodin-recently-edited-meta-load-full', function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		loadFullMetaKey($(this));
 	});
 
 	$(document).on('click', '.elodin-recently-edited-media-preview, .elodin-recently-edited-media-edit', function (e) {

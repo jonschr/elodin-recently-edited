@@ -372,44 +372,21 @@ function elodin_recently_edited_get_global_menu_cache_key( $is_admin_context = n
 	return 'elodin_recently_edited_menu_' . md5(
 		wp_json_encode(
 			array(
-				'version'   => ELODIN_RECENTLY_EDITED_VERSION,
-				'schema'    => 4,
-				'statuses'  => elodin_recently_edited_get_menu_post_statuses(),
-				'limit'     => elodin_recently_edited_get_menu_item_limit(),
-				'is_admin'  => (bool) $is_admin_context,
-				'posttypes' => array_keys( elodin_recently_edited_get_switchable_post_types() ),
-				'gf'        => elodin_recently_edited_is_gravity_forms_available(),
-				'media'     => current_user_can( 'upload_files' ),
+				'version'        => ELODIN_RECENTLY_EDITED_VERSION,
+				'schema'         => 4,
+				'generation'     => elodin_recently_edited_get_client_menu_cache_version(),
+				'statuses'       => elodin_recently_edited_get_menu_post_statuses(),
+				'limit'          => elodin_recently_edited_get_menu_item_limit(),
+				'is_admin'       => (bool) $is_admin_context,
+				'posttypes'      => array_keys( elodin_recently_edited_get_switchable_post_types() ),
+				'reviews'        => function_exists( 'elodin_recently_edited_get_review_post_types' ) ? elodin_recently_edited_get_review_post_types() : array(),
+				'review_states'  => function_exists( 'elodin_recently_edited_get_review_states_config' ) ? elodin_recently_edited_get_review_states_config() : array(),
+				'meta_inspector' => function_exists( 'elodin_recently_edited_should_enable_meta_inspector' ) && elodin_recently_edited_should_enable_meta_inspector(),
+				'gf'             => elodin_recently_edited_is_gravity_forms_available(),
+				'media'          => current_user_can( 'upload_files' ),
 			)
 		)
 	);
-}
-
-/**
- * Get the browser-side menu cache version.
- *
- * @since 1.4.2
- *
- * @return int Cache version.
- */
-function elodin_recently_edited_get_client_menu_cache_version() {
-	$version = (int) get_option( 'elodin_recently_edited_menu_cache_version', 1 );
-
-	return max( 1, $version );
-}
-
-/**
- * Bump the browser-side menu cache version.
- *
- * @since 1.4.2
- *
- * @return int Updated cache version.
- */
-function elodin_recently_edited_bump_client_menu_cache_version() {
-	$version = elodin_recently_edited_get_client_menu_cache_version() + 1;
-	update_option( 'elodin_recently_edited_menu_cache_version', $version, false );
-
-	return $version;
 }
 
 /**
@@ -447,9 +424,10 @@ function elodin_recently_edited_get_global_menu_cache_item() {
  * @param string $current_post_type Current post type.
  * @param int    $current_post_id Current post ID.
  * @param array  $pinned_ids Pinned post IDs.
+ * @param array  $review_states Review states keyed by post ID.
  * @return array Decorated fragments.
  */
-function elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_post_type, $current_post_id, $pinned_ids = array() ) {
+function elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_post_type, $current_post_id, $pinned_ids = array(), $review_states = array() ) {
 	if ( ! is_array( $cached_menu ) ) {
 		return array();
 	}
@@ -457,6 +435,7 @@ function elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_pos
 	$current_post_type = sanitize_key( $current_post_type );
 	$current_post_id   = intval( $current_post_id );
 	$pinned_ids        = array_fill_keys( array_map( 'intval', is_array( $pinned_ids ) ? $pinned_ids : array() ), true );
+	$review_states     = is_array( $review_states ) ? $review_states : array();
 	$active_group      = $current_post_type ? $current_post_type : 'all';
 
 	if ( ! empty( $cached_menu['available_groups'] ) && is_array( $cached_menu['available_groups'] ) && ! in_array( $active_group, $cached_menu['available_groups'], true ) ) {
@@ -499,6 +478,16 @@ function elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_pos
 					}
 
 					return '<span class="' . esc_attr( $classes ) . '" data-post-id="' . $post_id . '"' . $matches[3] . '>' . ( $is_pinned ? '★' : '☆' ) . '</span>';
+				},
+				$row
+			);
+			$row = preg_replace_callback(
+				'/<button type="button" class="[^"]*elodin-recently-edited-review-status[^"]*"[^>]*data-post-id="(\d+)"[^>]*>.*?<\/button>/',
+				function ( $matches ) use ( $review_states ) {
+					$post_id = intval( $matches[1] );
+					$state   = isset( $review_states[ $post_id ] ) ? sanitize_key( $review_states[ $post_id ] ) : '';
+
+					return elodin_recently_edited_get_review_status_control( $post_id, $state );
 				},
 				$row
 			);
@@ -568,44 +557,6 @@ function elodin_recently_edited_sort_cached_rows_by_pins( $rows, $pinned_ids ) {
 }
 
 /**
- * Clear cached rendered menu fragments.
- *
- * @since 1.4.2
- *
- * @return void
- */
-function elodin_recently_edited_clear_menu_cache() {
-	delete_transient( elodin_recently_edited_get_global_menu_cache_key( true ) );
-	delete_transient( elodin_recently_edited_get_global_menu_cache_key( false ) );
-	elodin_recently_edited_bump_client_menu_cache_version();
-	elodin_recently_edited_schedule_menu_cache_rebuild();
-}
-
-/**
- * Schedule an immediate background rebuild of rendered menu fragments.
- *
- * @since 1.4.2
- *
- * @return void
- */
-function elodin_recently_edited_schedule_menu_cache_rebuild() {
-	$args = array( get_current_user_id() );
-	if ( wp_next_scheduled( 'elodin_recently_edited_rebuild_menu_cache', $args ) ) {
-		return;
-	}
-
-	wp_schedule_single_event(
-		time(),
-		'elodin_recently_edited_rebuild_menu_cache',
-		$args
-	);
-
-	if ( function_exists( 'spawn_cron' ) ) {
-		spawn_cron( time() );
-	}
-}
-
-/**
  * Rebuild rendered menu fragments in the background.
  *
  * @since 1.4.2
@@ -634,17 +585,6 @@ function elodin_recently_edited_rebuild_menu_cache( $user_id = 0 ) {
 	$GLOBALS['elodin_recently_edited_render_full_menu'] = true;
 	elodin_recently_edited_admin_bar( $wp_admin_bar );
 	$GLOBALS['elodin_recently_edited_render_full_menu'] = $previous_rendering;
-}
-
-/**
- * Clear rendered menu cache after post changes.
- *
- * @since 1.4.2
- *
- * @return void
- */
-function elodin_recently_edited_clear_menu_cache_on_content_change() {
-	elodin_recently_edited_clear_menu_cache();
 }
 
 /**
@@ -1094,6 +1034,36 @@ function elodin_recently_edited_get_post_search_text( $post ) {
 }
 
 /**
+ * Build the optional personal review-status control for a post row.
+ *
+ * The selected state is applied later while decorating the shared menu cache,
+ * ensuring one user's review state is never cached for another user.
+ *
+ * @since 1.8.0
+ *
+ * @param int    $post_id Post ID.
+ * @param string $state Current review state.
+ * @return string Review control HTML.
+ */
+function elodin_recently_edited_get_review_status_control( $post_id, $state = '' ) {
+	$config = function_exists( 'elodin_recently_edited_get_review_states_config' )
+		? elodin_recently_edited_get_review_states_config( true )
+		: array();
+	$state  = sanitize_key( $state );
+	if ( ! isset( $config[ $state ] ) ) {
+		$state = '';
+	}
+
+	$label = $state ? $config[ $state ]['label'] : __( 'Blank', 'elodin-recently-edited' );
+	$color = $state ? sanitize_hex_color( $config[ $state ]['color'] ) : '';
+	$classes = 'elodin-recently-edited-review-status' . ( $state ? '' : ' is-blank' );
+	$tooltip = sprintf( __( 'Review: %s. Click to cycle.', 'elodin-recently-edited' ), $label );
+	$style   = $color ? ' style="--elodin-review-color:' . esc_attr( $color ) . '"' : '';
+
+	return '<button type="button" class="' . esc_attr( $classes ) . '" data-post-id="' . intval( $post_id ) . '" data-review-state="' . esc_attr( $state ) . '"' . $style . ' aria-label="' . esc_attr( $tooltip ) . '" title="' . esc_attr( $tooltip ) . '"><span class="elodin-recently-edited-review-dot" aria-hidden="true"></span></button>';
+}
+
+/**
  * Build the row HTML for a post menu item.
  *
  * @since 1.3.0
@@ -1192,14 +1162,21 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 		$modified_title .= ': ' . $editor_name;
 	}
 	$copy_url = get_permalink( $post->ID );
+	$review_types = function_exists( 'elodin_recently_edited_get_review_post_types' ) ? elodin_recently_edited_get_review_post_types() : array();
+	$review_control = in_array( $post->post_type, $review_types, true )
+		? elodin_recently_edited_get_review_status_control( $post->ID )
+		: '';
+	$meta_inspector_control = function_exists( 'elodin_recently_edited_should_enable_meta_inspector' ) && elodin_recently_edited_should_enable_meta_inspector()
+		? '<button type="button" class="elodin-recently-edited-meta-trigger" data-post-id="' . intval( $post->ID ) . '" data-post-title="' . esc_attr( $post->post_title ) . '" aria-label="' . esc_attr( sprintf( __( 'Inspect meta for %s', 'elodin-recently-edited' ), $post->post_title ) ) . '" title="' . esc_attr__( 'Inspect post meta', 'elodin-recently-edited' ) . '"><span class="elodin-recently-edited-meta-trigger-icon" aria-hidden="true"></span></button>'
+		: '';
 
 	$row_class = $post->post_status === 'publish' ? 'elodin-recently-edited-row' : 'elodin-recently-edited-row elodin-recently-edited-row--not-published';
 	if ( intval( $post->ID ) === intval( $current_post_id ) ) {
 		$row_class .= ' elodin-recently-edited-row--current';
 	}
 
-	return '<span class="' . esc_attr( $row_class ) . '" data-related-group="' . esc_attr( $group ) . '" data-post-type="' . esc_attr( $post->post_type ) . '" data-modified="' . intval( $modified_raw ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
-		. '<span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" role="button" tabindex="0" aria-label="' . esc_attr__( 'Star or unstar this item', 'elodin-recently-edited' ) . '" title="' . esc_attr__( 'Star or unstar this item', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>'
+	return '<span class="' . esc_attr( $row_class ) . '" data-related-group="' . esc_attr( $group ) . '" data-post-type="' . esc_attr( $post->post_type ) . '" data-review-enabled="' . ( $review_control ? '1' : '0' ) . '" data-modified="' . intval( $modified_raw ) . '" data-search-text="' . esc_attr( $search_text ) . '">'
+		. '<span class="elodin-recently-edited-row-markers"><span class="' . esc_attr( $pin_class ) . '" data-post-id="' . intval( $post->ID ) . '" role="button" tabindex="0" aria-label="' . esc_attr__( 'Star or unstar this item', 'elodin-recently-edited' ) . '" title="' . esc_attr__( 'Star or unstar this item', 'elodin-recently-edited' ) . '">' . esc_html( $pin_icon ) . '</span>' . $review_control . '</span>'
 		. '<span class="elodin-recently-edited-title">'
 		. '<span class="elodin-recently-edited-action elodin-recently-edited-title-link" data-url="' . esc_url( $title_url ) . '"' . $title_new_tab_attr . ' data-resource-type="post" data-resource-id="' . intval( $post->ID ) . '" data-post-id="' . intval( $post->ID ) . '" data-full-title="' . esc_attr( $post->post_title ) . '" role="link" tabindex="0">' . $title . '</span>'
 		. '</span>'
@@ -1212,6 +1189,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 		. '<span class="elodin-recently-edited-published" title="' . esc_attr( $published_title ) . '">' . esc_html( $published ) . '</span>'
 		. '<span class="elodin-recently-edited-modified" title="' . esc_attr( $modified_title ) . '">' . esc_html( $modified ) . '</span>'
 		. '<span class="elodin-recently-edited-id" data-id="' . intval( $post->ID ) . '" role="button" tabindex="0" aria-label="' . esc_attr__( 'Copy ID', 'elodin-recently-edited' ) . '">' . intval( $post->ID ) . '</span>'
+		. '<span class="elodin-recently-edited-row-end-action">' . $meta_inspector_control . '</span>'
 		. '</span>';
 }
 
@@ -1578,6 +1556,7 @@ function elodin_recently_edited_add_cached_admin_bar_menu( $wp_admin_bar, $menu_
 				. '<span>' . esc_html__( 'Published', 'elodin-recently-edited' ) . '</span>'
 				. '<span>' . esc_html__( 'Edited', 'elodin-recently-edited' ) . '</span>'
 				. '<span>' . esc_html__( 'ID', 'elodin-recently-edited' ) . '</span>'
+				. '<span></span>'
 				. '</div>',
 			'href'   => false,
 			'meta'   => array( 'class' => 'elodin-recently-edited-column-header-item' ),
@@ -1707,12 +1686,15 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	$pinned_ids = array_map( 'intval', $pinned_ids );
 	$pinned_ids = array_filter( $pinned_ids );
 	$user_pinned_ids = $pinned_ids;
+	$user_review_states = function_exists( 'elodin_recently_edited_get_user_review_states' )
+		? elodin_recently_edited_get_user_review_states( $user_id )
+		: array();
 
 	$current_post_type = elodin_recently_edited_get_current_post_type();
 	$current_post_id   = elodin_recently_edited_get_current_post_id();
 	$cached_menu       = elodin_recently_edited_get_global_menu_cache_item();
 	if ( false !== $cached_menu ) {
-		$cached_menu = elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_post_type, $current_post_id, $user_pinned_ids );
+		$cached_menu = elodin_recently_edited_decorate_cached_menu( $cached_menu, $current_post_type, $current_post_id, $user_pinned_ids, $user_review_states );
 		elodin_recently_edited_add_cached_admin_bar_menu( $wp_admin_bar, $menu_id, $cached_menu );
 		return;
 	}
@@ -1947,7 +1929,7 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		array()
 	);
 	elodin_recently_edited_set_global_menu_cache_item( $cached_value );
-	$current_value   = elodin_recently_edited_decorate_cached_menu( $cached_value, $current_post_type, $current_post_id, $user_pinned_ids );
+	$current_value   = elodin_recently_edited_decorate_cached_menu( $cached_value, $current_post_type, $current_post_id, $user_pinned_ids, $user_review_states );
 	$post_type_links = isset( $current_value['post_type_links'] ) ? $current_value['post_type_links'] : $post_type_links;
 	$post_list_rows  = isset( $current_value['post_list_rows'] ) ? $current_value['post_list_rows'] : $post_list_rows;
 
@@ -1961,11 +1943,6 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 		)
 	);
 }
-
-add_action( 'save_post', 'elodin_recently_edited_clear_menu_cache_on_content_change' );
-add_action( 'deleted_post', 'elodin_recently_edited_clear_menu_cache_on_content_change' );
-add_action( 'transition_post_status', 'elodin_recently_edited_clear_menu_cache_on_content_change' );
-add_action( 'elodin_recently_edited_rebuild_menu_cache', 'elodin_recently_edited_rebuild_menu_cache' );
 
 /**
  * Register REST endpoint for lazy-loaded menu contents.
@@ -1998,6 +1975,263 @@ function elodin_recently_edited_register_rest_routes() {
 			},
 		)
 	);
+
+	register_rest_route(
+		'elodin-recently-edited/v1',
+		'/posts/(?P<id>\d+)/meta',
+		array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => 'elodin_recently_edited_rest_get_post_meta',
+			'permission_callback' => 'elodin_recently_edited_rest_can_inspect_post_meta',
+			'args'                => array(
+				'id' => array(
+					'required'          => true,
+					'sanitize_callback' => 'absint',
+				),
+				'key' => array(
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+			),
+		)
+	);
+}
+
+/**
+ * Check whether the current user may inspect a post's metadata.
+ *
+ * @since 1.8.0
+ *
+ * @param WP_REST_Request $request REST request.
+ * @return true|WP_Error Permission result.
+ */
+function elodin_recently_edited_rest_can_inspect_post_meta( $request ) {
+	$post_id = absint( $request->get_param( 'id' ) );
+	if ( ! is_user_logged_in() || ! elodin_recently_edited_runtime_enabled() || ! function_exists( 'elodin_recently_edited_should_enable_meta_inspector' ) || ! elodin_recently_edited_should_enable_meta_inspector() ) {
+		return new WP_Error( 'elodin_recently_edited_meta_forbidden', __( 'Meta inspection is unavailable.', 'elodin-recently-edited' ), array( 'status' => 403 ) );
+	}
+
+	if ( ! $post_id || ! get_post( $post_id ) || ! current_user_can( 'edit_post', $post_id ) ) {
+		return new WP_Error( 'elodin_recently_edited_meta_forbidden', __( 'You cannot inspect meta for this item.', 'elodin-recently-edited' ), array( 'status' => 403 ) );
+	}
+
+	return true;
+}
+
+/**
+ * Determine whether a meta key's values should be redacted in the inspector.
+ *
+ * @since 1.8.0
+ *
+ * @param string $meta_key Meta key.
+ * @param int    $post_id Post ID.
+ * @return bool Whether the value is sensitive.
+ */
+function elodin_recently_edited_is_sensitive_meta_key( $meta_key, $post_id ) {
+	$patterns = array(
+		'password',
+		'passwd',
+		'secret',
+		'token',
+		'api_key',
+		'apikey',
+		'auth',
+		'credential',
+		'private_key',
+		'license_key',
+		'session',
+		'cookie',
+		'nonce',
+		'salt',
+	);
+
+	/**
+	 * Filter fragments used to identify sensitive meta keys.
+	 *
+	 * @param array<int,string> $patterns Sensitive key fragments.
+	 * @param int               $post_id Post ID.
+	 */
+	$patterns = apply_filters( 'elodin_recently_edited_sensitive_meta_key_patterns', $patterns, $post_id );
+	$is_sensitive = false;
+	foreach ( is_array( $patterns ) ? $patterns : array() as $pattern ) {
+		$pattern = strtolower( trim( (string) $pattern ) );
+		if ( '' !== $pattern && false !== strpos( strtolower( $meta_key ), $pattern ) ) {
+			$is_sensitive = true;
+			break;
+		}
+	}
+
+	/**
+	 * Filter whether one specific meta key is redacted.
+	 *
+	 * @param bool   $is_sensitive Whether the key appears sensitive.
+	 * @param string $meta_key Meta key.
+	 * @param int    $post_id Post ID.
+	 */
+	return (bool) apply_filters( 'elodin_recently_edited_sensitive_meta_key', $is_sensitive, $meta_key, $post_id );
+}
+
+/**
+ * Normalize a metadata value into JSON-safe primitives without invoking object methods.
+ *
+ * @since 1.8.0
+ *
+ * @param mixed $value Value to normalize.
+ * @param int   $depth Current nesting depth.
+ * @return mixed Normalized value.
+ */
+function elodin_recently_edited_normalize_meta_value( $value, $depth = 0 ) {
+	if ( $depth >= 8 ) {
+		return '[maximum depth reached]';
+	}
+
+	if ( is_string( $value ) ) {
+		$valid = wp_check_invalid_utf8( $value, true );
+		return '' === $valid && '' !== $value ? '[binary or non-UTF-8 string]' : $valid;
+	}
+	if ( is_int( $value ) || is_float( $value ) || is_bool( $value ) || null === $value ) {
+		return $value;
+	}
+	if ( is_resource( $value ) ) {
+		return '[resource]';
+	}
+
+	$normalized = array();
+	foreach ( (array) $value as $key => $child ) {
+		$normalized[ (string) $key ] = elodin_recently_edited_normalize_meta_value( $child, $depth + 1 );
+	}
+
+	return $normalized;
+}
+
+/**
+ * Convert one stored meta value to a typed, size-aware inspector record.
+ *
+ * @since 1.8.0
+ *
+ * @param mixed $raw_value Raw stored value.
+ * @param bool  $full Whether to return the expanded value.
+ * @return array<string,mixed> Inspector value record.
+ */
+function elodin_recently_edited_prepare_meta_value( $raw_value, $full = false ) {
+	$value = maybe_unserialize( $raw_value );
+	$type  = gettype( $value );
+
+	if ( is_array( $value ) || is_object( $value ) ) {
+		$display = wp_json_encode( elodin_recently_edited_normalize_meta_value( $value ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		if ( false === $display ) {
+			$display = '[unable to encode structured value]';
+		}
+	} elseif ( is_bool( $value ) ) {
+		$display = $value ? 'true' : 'false';
+	} elseif ( null === $value ) {
+		$display = 'null';
+	} else {
+		$display = (string) elodin_recently_edited_normalize_meta_value( $value );
+	}
+
+	$size  = strlen( $display );
+	$limit = $full
+		? max( 1000, intval( apply_filters( 'elodin_recently_edited_meta_full_value_limit', 200000 ) ) )
+		: max( 100, intval( apply_filters( 'elodin_recently_edited_meta_preview_value_limit', 800 ) ) );
+	$truncated = $size > $limit;
+	if ( $truncated ) {
+		$display = function_exists( 'mb_substr' ) ? mb_substr( $display, 0, $limit ) : substr( $display, 0, $limit );
+		$display .= "\n…";
+	}
+
+	return array(
+		'type'      => $type,
+		'size'      => $size,
+		'value'     => $display,
+		'truncated' => $truncated,
+	);
+}
+
+/**
+ * Return read-only metadata for the in-menu Meta Inspector.
+ *
+ * Values are never persisted in browser storage. Large values are previewed
+ * and can be requested independently by key.
+ *
+ * @since 1.8.0
+ *
+ * @param WP_REST_Request $request REST request.
+ * @return WP_REST_Response|WP_Error REST response.
+ */
+function elodin_recently_edited_rest_get_post_meta( $request ) {
+	$post_id      = absint( $request->get_param( 'id' ) );
+	$post         = get_post( $post_id );
+	$requested_key = $request->get_param( 'key' );
+	$requested_key = null === $requested_key ? '' : (string) $requested_key;
+	if ( ! $post instanceof WP_Post ) {
+		return new WP_Error( 'elodin_recently_edited_meta_missing', __( 'Post not found.', 'elodin-recently-edited' ), array( 'status' => 404 ) );
+	}
+
+	$all_meta = get_post_meta( $post_id );
+	if ( ! is_array( $all_meta ) ) {
+		$all_meta = array();
+	}
+	uksort( $all_meta, 'strnatcasecmp' );
+
+	$items = array();
+	foreach ( $all_meta as $meta_key => $raw_values ) {
+		$meta_key = (string) $meta_key;
+		if ( '' !== $requested_key && $meta_key !== $requested_key ) {
+			continue;
+		}
+
+		/**
+		 * Filter whether a key appears in the inspector at all.
+		 *
+		 * @param bool   $visible Whether the key is visible.
+		 * @param string $meta_key Meta key.
+		 * @param int    $post_id Post ID.
+		 */
+		if ( ! apply_filters( 'elodin_recently_edited_meta_key_visible', true, $meta_key, $post_id ) ) {
+			continue;
+		}
+
+		$raw_values = is_array( $raw_values ) ? $raw_values : array( $raw_values );
+		$redacted   = elodin_recently_edited_is_sensitive_meta_key( $meta_key, $post_id );
+		$values     = array();
+		if ( $redacted ) {
+			$values[] = array(
+				'type'      => 'redacted',
+				'size'      => 0,
+				'value'     => __( 'Value redacted because this key may contain sensitive data.', 'elodin-recently-edited' ),
+				'truncated' => false,
+			);
+		} else {
+			foreach ( $raw_values as $raw_value ) {
+				$values[] = elodin_recently_edited_prepare_meta_value( $raw_value, '' !== $requested_key );
+			}
+		}
+
+		$items[] = array(
+			'key'      => $meta_key,
+			'count'    => count( $raw_values ),
+			'redacted' => $redacted,
+			'values'   => $values,
+		);
+	}
+
+	$response = rest_ensure_response(
+		array(
+			'post' => array(
+				'id'    => $post_id,
+				'title' => get_the_title( $post ),
+				'type'  => $post->post_type,
+			),
+			'items'      => $items,
+			'totalKeys'  => count( $items ),
+			'requestedKey' => $requested_key,
+		)
+	);
+	$response->header( 'Cache-Control', 'no-store, private' );
+	$response->header( 'X-Robots-Tag', 'noindex' );
+
+	return $response;
 }
 
 /**
@@ -2150,7 +2384,8 @@ function elodin_recently_edited_rest_get_menu( $request ) {
 
 	return rest_ensure_response(
 		array(
-			'nodes' => $nodes,
+			'nodes'       => $nodes,
+			'cacheSchema' => elodin_recently_edited_get_client_menu_cache_version(),
 		)
 	);
 }

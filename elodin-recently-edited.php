@@ -3,7 +3,7 @@
  * Recently Edited Quick Links - Main Plugin File
  *
  * @package ElodinRecentlyEdited
- * @version 1.7.0
+ * @version 1.8.0
  * @author Jon Schroeder
  * @license GPL-2.0+
  */
@@ -12,7 +12,7 @@
 	Plugin Name: Recently Edited Quick Links
 	Plugin URI: https://elod.in
 	Description: Adds a quick access menu to the WordPress admin bar showing recently edited posts with status management and pinning functionality.
-	Version: 1.7.0
+	Version: 1.8.0
 	Author: Jon Schroeder
 	Author URI: https://elod.in
 	License: GPL-2.0+
@@ -31,9 +31,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Define plugin constants
 define( 'ELODIN_RECENTLY_EDITED_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ELODIN_RECENTLY_EDITED_URL', plugin_dir_url( __FILE__ ) );
-define( 'ELODIN_RECENTLY_EDITED_VERSION', '1.7.0' );
+define( 'ELODIN_RECENTLY_EDITED_VERSION', '1.8.0' );
 define( 'ELODIN_RECENTLY_EDITED_BASENAME', plugin_basename( __FILE__ ) );
 define( 'ELODIN_RECENTLY_EDITED_LEMON_PRODUCT_ID', 984046 );
+
+// Cache invalidation must remain active for core REST and third-party AJAX saves.
+require_once ELODIN_RECENTLY_EDITED_DIR . 'lib/cache.php';
 
 /**
  * Determine whether the current request is an AJAX action owned by this plugin.
@@ -122,6 +125,7 @@ add_action( 'wp_enqueue_scripts', 'elodin_recently_edited_enqueue_assets' );
 
 // AJAX handlers with proper action naming
 add_action( 'wp_ajax_elodin_recently_edited_toggle_pin', 'elodin_recently_edited_toggle_pin' );
+add_action( 'wp_ajax_elodin_recently_edited_update_review_status', 'elodin_recently_edited_update_review_status' );
 add_action( 'wp_ajax_elodin_recently_edited_update_status', 'elodin_recently_edited_update_status' );
 add_action( 'wp_ajax_elodin_recently_edited_update_gravity_form_status', 'elodin_recently_edited_update_gravity_form_status' );
 add_action( 'wp_ajax_elodin_recently_edited_update_post_type', 'elodin_recently_edited_update_post_type' );

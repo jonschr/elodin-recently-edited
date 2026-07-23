@@ -87,6 +87,70 @@ function elodin_recently_edited_toggle_pin() {
 }
 
 /**
+ * Save a personal review state without updating the post or its metadata.
+ *
+ * All states live in one user-meta record, so this action cannot change the
+ * post's modified timestamp.
+ *
+ * @since 1.8.0
+ *
+ * @return void
+ */
+function elodin_recently_edited_update_review_status() {
+	elodin_recently_edited_require_active_license_for_ajax();
+
+	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'elodin_recently_edited_review' ) ) {
+		wp_send_json_error( array( 'message' => __( 'Security check failed.', 'elodin-recently-edited' ) ), 403 );
+	}
+
+	$post_id = isset( $_POST['post_id'] ) ? intval( $_POST['post_id'] ) : 0;
+	$state   = isset( $_POST['state'] ) ? sanitize_key( wp_unslash( $_POST['state'] ) ) : '';
+	$post    = $post_id ? get_post( $post_id ) : null;
+	if ( ! $post instanceof WP_Post || ! current_user_can( 'edit_post', $post_id ) ) {
+		wp_send_json_error( array( 'message' => __( 'Invalid post.', 'elodin-recently-edited' ) ), 403 );
+	}
+
+	$review_types = function_exists( 'elodin_recently_edited_get_review_post_types' )
+		? elodin_recently_edited_get_review_post_types()
+		: array();
+	if ( ! in_array( $post->post_type, $review_types, true ) ) {
+		wp_send_json_error( array( 'message' => __( 'Review tracking is not enabled for this content type.', 'elodin-recently-edited' ) ), 400 );
+	}
+
+	$state_config = function_exists( 'elodin_recently_edited_get_review_states_config' )
+		? elodin_recently_edited_get_review_states_config( true )
+		: array();
+	$allowed = array_merge( array( '' ), array_keys( $state_config ) );
+	if ( ! in_array( $state, $allowed, true ) ) {
+		wp_send_json_error( array( 'message' => __( 'Invalid review status.', 'elodin-recently-edited' ) ), 400 );
+	}
+
+	$user_id = get_current_user_id();
+	$states  = function_exists( 'elodin_recently_edited_get_user_review_states' )
+		? elodin_recently_edited_get_user_review_states( $user_id )
+		: array();
+	if ( '' === $state ) {
+		unset( $states[ $post_id ] );
+	} else {
+		$states[ $post_id ] = $state;
+	}
+
+	if ( $states ) {
+		update_user_meta( $user_id, 'elodin_recently_edited_review_states', $states );
+	} else {
+		delete_user_meta( $user_id, 'elodin_recently_edited_review_states' );
+	}
+
+	wp_send_json_success(
+		array(
+			'postId' => $post_id,
+			'state'  => $state,
+			'message' => __( 'Review status saved.', 'elodin-recently-edited' ),
+		)
+	);
+}
+
+/**
  * Update post status via AJAX.
  *
  * @since 0.1

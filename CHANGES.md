@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.8.0 - 2026-07-21
+- Refreshed the visible Recently Edited menu in place after successful block-editor saves so the saved item immediately moves to its newly sorted position.
+- Made menu-cache invalidation load during all WordPress REST and AJAX requests so block-editor, page, and custom post type saves consistently clear and rebuild the index.
+- Added a cache generation to server-rendered menu keys and deduplicated repeated invalidations during a single save request.
+- Added a read-only Meta Inspector for WordPress content with searchable keys and values, copy controls, structured-value expansion, lazy loading for large values, capability checks, and sensitive-key redaction.
+- Condensed ordinary scalar metadata into single-line rows while retaining expanded cards for arrays, objects, multi-values, and long values.
+- Added optional per-content-type review tracking stored entirely in user meta, ensuring review changes never alter a post or its modified date.
+- Added a compact click-to-cycle review marker with Blank, Unfinished, In progress, Complete, and Needs review defaults.
+- Added settings for adding, removing, renaming, and recoloring review states, plus per-content-type controls for clearing the current user's states.
+- Reworked the review-state settings into a compact editor with Gutenberg color-picker popovers, visible Add/Remove controls, and disable toggles for protected default states.
+- Kept both review tracking and the Meta Inspector disabled by default, with independent opt-in controls.
+- Kept review markers visible in both the All and individual content-type views, including after lazy menu hydration.
+- Moved Meta Inspector triggers into a dedicated far-right row action so they cannot interfere with title editing.
+- Replaced the inspector's icon-font dependency with a theme-proof CSS magnifier to prevent front-end styling artifacts.
+
 ## 1.7.0 - 2026-07-21
 - Restored native Backspace behavior inside the retained search field, placed the caret at the end when reopening, and added an explicit clear button.
 - Changed every post-type view and the combined All view to sort by last modified time, with starred items as the only priority exception.
