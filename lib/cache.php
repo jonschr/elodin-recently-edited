@@ -3,8 +3,9 @@
  * Cache invalidation for Recently Edited Quick Links.
  *
  * This file is intentionally loaded for every WordPress request. Post updates
- * commonly arrive through the REST API or third-party AJAX actions, while the
- * heavier admin-bar runtime is skipped for those requests.
+ * commonly arrive through the REST API or third-party AJAX actions, so those
+ * requests only mark the menu as dirty. An administrator page load promotes
+ * that marker to a new cache generation and the browser rebuilds it lazily.
  *
  * @package ElodinRecentlyEdited
  */
@@ -37,49 +38,38 @@ function elodin_recently_edited_bump_client_menu_cache_version() {
 }
 
 /**
- * Schedule an immediate background rebuild of rendered menu fragments.
+ * Determine whether content has changed since the last cache generation.
  *
- * @since 1.4.2
+ * @since 1.8.1
  *
- * @return void
+ * @return bool Whether the menu cache is dirty.
  */
-function elodin_recently_edited_schedule_menu_cache_rebuild() {
-	static $queued = false;
-
-	if ( $queued ) {
-		return;
-	}
-	$queued = true;
-
-	$GLOBALS['elodin_recently_edited_cache_rebuild_user_id'] = get_current_user_id();
-	add_action( 'shutdown', 'elodin_recently_edited_dispatch_menu_cache_rebuild', 1 );
+function elodin_recently_edited_is_menu_cache_dirty() {
+	return false !== get_option( 'elodin_recently_edited_menu_cache_dirty', false );
 }
 
 /**
- * Dispatch the queued rebuild after the update request has finished saving.
+ * Mark the menu cache dirty without rebuilding or changing its generation.
  *
- * @since 1.8.0
+ * The option is written only for the first content change in a dirty period.
+ * This keeps bulk imports from repeatedly updating the generation option or
+ * scheduling one cron rebuild per request.
+ *
+ * @since 1.8.1
  *
  * @return void
  */
-function elodin_recently_edited_dispatch_menu_cache_rebuild() {
-	$user_id = isset( $GLOBALS['elodin_recently_edited_cache_rebuild_user_id'] )
-		? absint( $GLOBALS['elodin_recently_edited_cache_rebuild_user_id'] )
-		: 0;
-	$args = array( $user_id );
-	if ( wp_next_scheduled( 'elodin_recently_edited_rebuild_menu_cache', $args ) ) {
+function elodin_recently_edited_mark_menu_cache_dirty() {
+	static $marked = false;
+
+	if ( $marked || elodin_recently_edited_is_menu_cache_dirty() ) {
 		return;
 	}
+	$marked = true;
 
-	wp_schedule_single_event(
-		time(),
-		'elodin_recently_edited_rebuild_menu_cache',
-		$args
-	);
-
-	if ( function_exists( 'spawn_cron' ) ) {
-		spawn_cron( time() );
-	}
+	// Autoload this tiny marker so subsequent import requests find it without
+	// issuing a dedicated option query.
+	add_option( 'elodin_recently_edited_menu_cache_dirty', time(), '', 'yes' );
 }
 
 /**
@@ -102,37 +92,75 @@ function elodin_recently_edited_clear_menu_cache() {
 	}
 	$cleared = true;
 
+	delete_option( 'elodin_recently_edited_menu_cache_dirty' );
+
 	if ( function_exists( 'elodin_recently_edited_get_global_menu_cache_key' ) ) {
 		delete_transient( elodin_recently_edited_get_global_menu_cache_key( true ) );
 		delete_transient( elodin_recently_edited_get_global_menu_cache_key( false ) );
 	}
 
 	elodin_recently_edited_bump_client_menu_cache_version();
-	elodin_recently_edited_schedule_menu_cache_rebuild();
 }
 
 /**
- * Clear the menu cache after a post, page, or custom post type changes.
+ * Mark the menu cache dirty after content changes.
  *
- * @since 1.4.2
+ * @since 1.8.1
  *
  * @param int $post_id Changed post ID.
  * @return void
  */
-function elodin_recently_edited_clear_menu_cache_on_content_change( $post_id = 0 ) {
+function elodin_recently_edited_mark_menu_cache_dirty_on_content_change( $post_id = 0 ) {
 	$post_id = absint( $post_id );
 
-	// The parent post save provides the meaningful invalidation for revisions.
+	// The parent post save provides the meaningful change for revisions.
 	if ( $post_id && ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) ) {
+		return;
+	}
+
+	elodin_recently_edited_mark_menu_cache_dirty();
+}
+
+/**
+ * Promote a pending content change to a new cache generation on page load.
+ *
+ * Requiring an administrator and an ordinary GET/HEAD page request prevents
+ * imports, cron jobs, REST requests, AJAX actions, and form submissions from
+ * doing the expensive menu work. The newly generated page tells the browser
+ * that its local index is stale; the existing lazy REST request then rebuilds
+ * the rendered cache after the page has loaded.
+ *
+ * @since 1.8.1
+ *
+ * @return void
+ */
+function elodin_recently_edited_maybe_invalidate_dirty_menu_cache() {
+	if ( ! elodin_recently_edited_is_menu_cache_dirty() || ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+
+	if ( ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() )
+		|| ( defined( 'REST_REQUEST' ) && REST_REQUEST )
+		|| ( defined( 'DOING_CRON' ) && DOING_CRON )
+		|| ( defined( 'XMLRPC_REQUEST' ) && XMLRPC_REQUEST )
+	) {
+		return;
+	}
+
+	$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : 'GET';
+	if ( ! in_array( $request_method, array( 'GET', 'HEAD' ), true ) ) {
 		return;
 	}
 
 	elodin_recently_edited_clear_menu_cache();
 }
 
-// Keep these lightweight hooks active during core REST and third-party AJAX saves.
-add_action( 'save_post', 'elodin_recently_edited_clear_menu_cache_on_content_change', 100 );
-add_action( 'deleted_post', 'elodin_recently_edited_clear_menu_cache_on_content_change', 100 );
-add_action( 'trashed_post', 'elodin_recently_edited_clear_menu_cache_on_content_change', 100 );
-add_action( 'untrashed_post', 'elodin_recently_edited_clear_menu_cache_on_content_change', 100 );
-add_action( 'elodin_recently_edited_rebuild_menu_cache', 'elodin_recently_edited_rebuild_menu_cache' );
+// Keep only the lightweight dirty-marker hooks active during external saves.
+add_action( 'save_post', 'elodin_recently_edited_mark_menu_cache_dirty_on_content_change', 100 );
+add_action( 'deleted_post', 'elodin_recently_edited_mark_menu_cache_dirty_on_content_change', 100 );
+add_action( 'trashed_post', 'elodin_recently_edited_mark_menu_cache_dirty_on_content_change', 100 );
+add_action( 'untrashed_post', 'elodin_recently_edited_mark_menu_cache_dirty_on_content_change', 100 );
+
+// Cover both wp-admin screens and front-end pages viewed by an administrator.
+add_action( 'admin_init', 'elodin_recently_edited_maybe_invalidate_dirty_menu_cache', 1 );
+add_action( 'wp', 'elodin_recently_edited_maybe_invalidate_dirty_menu_cache', 1 );

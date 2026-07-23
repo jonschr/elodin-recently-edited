@@ -737,6 +737,31 @@
 		scrollbar-width: thin;
 	}
 
+	.elodin-recently-edited-virtual-spacer {
+		display: block !important;
+		width: 1px !important;
+		min-height: 0 !important;
+		padding: 0 !important;
+		margin: 0 !important;
+		pointer-events: none !important;
+	}
+
+	.elodin-recently-edited-virtual-header {
+		box-sizing: border-box !important;
+		height: 20px !important;
+		padding: 0 8px !important;
+		color: rgba(255, 255, 255, 0.46) !important;
+		font-size: 9px !important;
+		font-weight: 600 !important;
+		line-height: 20px !important;
+		letter-spacing: 0.06em !important;
+		text-transform: uppercase !important;
+	}
+
+	.elodin-recently-edited-virtual-header + .elodin-recently-edited-list-item {
+		border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+	}
+
 	.elodin-recently-edited-post-list::-webkit-scrollbar {
 		width: 8px;
 	}
@@ -886,6 +911,15 @@
 
 #wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-starred {
 	background: rgba(244, 197, 66, 0.045) !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-keyboard-selected {
+	background: rgba(244, 197, 66, 0.16) !important;
+	box-shadow: inset 3px 0 0 #f4c542 !important;
+}
+
+#wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-starred.is-keyboard-selected {
+	background: rgba(244, 197, 66, 0.22) !important;
 }
 
 #wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-list-item.is-first-starred,
@@ -1179,6 +1213,7 @@
 	color: #fff !important;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif !important;
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42) !important;
+	contain: layout paint style !important;
 }
 
 #wpadminbar #wp-admin-bar-recently-edited .elodin-recently-edited-meta-header {

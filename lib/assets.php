@@ -67,6 +67,7 @@ function elodin_recently_edited_enqueue_assets() {
 			'restNonce'     => wp_create_nonce( 'wp_rest' ),
 			'currentPostType' => function_exists( 'elodin_recently_edited_get_current_post_type' ) ? elodin_recently_edited_get_current_post_type() : '',
 			'currentPostId'   => $current_post_id,
+			'currentUserId'   => get_current_user_id(),
 			'currentEditUrl'  => $current_edit_url ? esc_url_raw( $current_edit_url ) : '',
 			'currentViewUrl'  => $current_view_url ? esc_url_raw( $current_view_url ) : '',
 			'reviewStates'    => function_exists( 'elodin_recently_edited_get_review_states_config' ) ? array_values( elodin_recently_edited_get_review_states_config( true ) ) : array(),
@@ -75,6 +76,7 @@ function elodin_recently_edited_enqueue_assets() {
 			'isAdmin'         => is_admin(),
 			'cacheKey'        => 'elodin_recently_edited_menu_' . md5( home_url() ) . '_' . ELODIN_RECENTLY_EDITED_VERSION,
 			'cacheSchema'     => function_exists( 'elodin_recently_edited_get_client_menu_cache_version' ) ? elodin_recently_edited_get_client_menu_cache_version() : 1,
+			'cacheFormat'     => 3,
 			'strings'         => array(
 				'copied'             => __( 'Copied', 'elodin-recently-edited' ),
 				'copiedFilename'     => __( 'Copied filename', 'elodin-recently-edited' ),

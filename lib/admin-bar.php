@@ -19,6 +19,96 @@ function elodin_recently_edited_get_view_link( $post ) {
 }
 
 /**
+ * Prime only the metadata needed to render Recently Edited post rows.
+ *
+ * WordPress normally loads every metadata row for every post returned by
+ * WP_Query. Some sites store large builder payloads in post meta, so the menu
+ * queries disable that default and this function fetches only the two small
+ * keys the row renderer actually uses.
+ *
+ * @since 1.8.1
+ *
+ * @param array $posts Posts whose row metadata should be loaded.
+ * @return void
+ */
+function elodin_recently_edited_prime_menu_row_meta( $posts ) {
+	global $wpdb;
+
+	if ( ! is_array( $posts ) ) {
+		return;
+	}
+
+	if ( ! isset( $GLOBALS['elodin_recently_edited_menu_row_meta'] ) || ! is_array( $GLOBALS['elodin_recently_edited_menu_row_meta'] ) ) {
+		$GLOBALS['elodin_recently_edited_menu_row_meta'] = array();
+	}
+
+	$post_ids = array();
+	foreach ( $posts as $post ) {
+		if ( $post instanceof WP_Post ) {
+			$post_ids[] = intval( $post->ID );
+		}
+	}
+	$post_ids = array_values( array_unique( array_filter( $post_ids ) ) );
+	if ( empty( $post_ids ) ) {
+		return;
+	}
+
+	foreach ( $post_ids as $post_id ) {
+		if ( ! isset( $GLOBALS['elodin_recently_edited_menu_row_meta'][ $post_id ] ) ) {
+			$GLOBALS['elodin_recently_edited_menu_row_meta'][ $post_id ] = array();
+		}
+	}
+
+	$meta_keys = array( '_elementor_edit_mode', '_edit_last' );
+	foreach ( array_chunk( $post_ids, 500 ) as $post_id_chunk ) {
+		$id_placeholders = implode( ', ', array_fill( 0, count( $post_id_chunk ), '%d' ) );
+		$query_args      = array_merge( $post_id_chunk, $meta_keys );
+		$query           = $wpdb->prepare(
+			"SELECT post_id, meta_key, meta_value
+			FROM {$wpdb->postmeta}
+			WHERE post_id IN ({$id_placeholders})
+			AND meta_key IN (%s, %s)
+			ORDER BY meta_id ASC",
+			$query_args
+		);
+		$meta_rows = $wpdb->get_results( $query, ARRAY_A );
+
+		foreach ( is_array( $meta_rows ) ? $meta_rows : array() as $meta_row ) {
+			$post_id  = isset( $meta_row['post_id'] ) ? intval( $meta_row['post_id'] ) : 0;
+			$meta_key = isset( $meta_row['meta_key'] ) ? (string) $meta_row['meta_key'] : '';
+			if ( ! $post_id || ! in_array( $meta_key, $meta_keys, true ) || isset( $GLOBALS['elodin_recently_edited_menu_row_meta'][ $post_id ][ $meta_key ] ) ) {
+				continue;
+			}
+
+			$GLOBALS['elodin_recently_edited_menu_row_meta'][ $post_id ][ $meta_key ] = isset( $meta_row['meta_value'] ) ? maybe_unserialize( $meta_row['meta_value'] ) : '';
+		}
+	}
+}
+
+/**
+ * Get one row-rendering meta value from the narrow request cache.
+ *
+ * Falls back to the Metadata API when called for a post that was not part of a
+ * menu query, preserving the behavior of edit-link helpers used elsewhere.
+ *
+ * @since 1.8.1
+ *
+ * @param int    $post_id Post ID.
+ * @param string $meta_key Metadata key.
+ * @return mixed Metadata value.
+ */
+function elodin_recently_edited_get_menu_row_meta( $post_id, $meta_key ) {
+	$post_id = intval( $post_id );
+	if ( isset( $GLOBALS['elodin_recently_edited_menu_row_meta'][ $post_id ] ) ) {
+		return isset( $GLOBALS['elodin_recently_edited_menu_row_meta'][ $post_id ][ $meta_key ] )
+			? $GLOBALS['elodin_recently_edited_menu_row_meta'][ $post_id ][ $meta_key ]
+			: '';
+	}
+
+	return get_post_meta( $post_id, $meta_key, true );
+}
+
+/**
  * Determine whether a post has been built with Elementor.
  *
  * @since 1.3.0
@@ -31,7 +121,7 @@ function elodin_recently_edited_is_elementor_post( $post ) {
 		return false;
 	}
 
-	$is_elementor = 'builder' === get_post_meta( $post->ID, '_elementor_edit_mode', true );
+	$is_elementor = 'builder' === elodin_recently_edited_get_menu_row_meta( $post->ID, '_elementor_edit_mode' );
 
 	/**
 	 * Filter whether a post should use the Elementor editor link.
@@ -373,7 +463,7 @@ function elodin_recently_edited_get_global_menu_cache_key( $is_admin_context = n
 		wp_json_encode(
 			array(
 				'version'        => ELODIN_RECENTLY_EDITED_VERSION,
-				'schema'         => 4,
+				'schema'         => 5,
 				'generation'     => elodin_recently_edited_get_client_menu_cache_version(),
 				'statuses'       => elodin_recently_edited_get_menu_post_statuses(),
 				'limit'          => elodin_recently_edited_get_menu_item_limit(),
@@ -557,6 +647,88 @@ function elodin_recently_edited_sort_cached_rows_by_pins( $rows, $pinned_ids ) {
 }
 
 /**
+ * Read one escaped HTML attribute from a rendered menu row.
+ *
+ * @since 1.8.1
+ *
+ * @param string $html Rendered row HTML.
+ * @param string $attribute Attribute name.
+ * @return string Decoded attribute value.
+ */
+function elodin_recently_edited_get_row_html_attribute( $html, $attribute ) {
+	$attribute = preg_replace( '/[^a-zA-Z0-9_-]/', '', (string) $attribute );
+	if ( '' === $attribute || ! preg_match( '/\\s' . preg_quote( $attribute, '/' ) . '="([^"]*)"/', (string) $html, $matches ) ) {
+		return '';
+	}
+
+	return html_entity_decode( $matches[1], ENT_QUOTES, 'UTF-8' );
+}
+
+/**
+ * Convert rendered menu rows to a non-DOM browser index.
+ *
+ * The browser keeps these records as plain data and creates elements only for
+ * the currently visible scroll window.
+ *
+ * @since 1.8.1
+ *
+ * @param array $rows Rendered row HTML fragments.
+ * @return array<int,array<string,mixed>> Virtual row records.
+ */
+function elodin_recently_edited_get_virtual_row_records( $rows ) {
+	$records = array();
+
+	foreach ( is_array( $rows ) ? $rows : array() as $index => $html ) {
+		$html          = (string) $html;
+		$post_type     = elodin_recently_edited_get_row_html_attribute( $html, 'data-post-type' );
+		$group         = elodin_recently_edited_get_row_html_attribute( $html, 'data-related-group' );
+		$search_text   = elodin_recently_edited_get_row_html_attribute( $html, 'data-search-text' );
+		$modified      = intval( elodin_recently_edited_get_row_html_attribute( $html, 'data-modified' ) );
+		$post_id       = intval( elodin_recently_edited_get_row_html_attribute( $html, 'data-post-id' ) );
+		$resource_type = '';
+		$resource_id   = '';
+		$view_url      = '';
+		$edit_url      = '';
+
+		if ( preg_match( '/data-resource-type="([^"]+)"\\s+data-resource-id="([^"]+)"/', $html, $resource_matches ) ) {
+			$resource_type = html_entity_decode( $resource_matches[1], ENT_QUOTES, 'UTF-8' );
+			$resource_id   = html_entity_decode( $resource_matches[2], ENT_QUOTES, 'UTF-8' );
+		}
+		if ( preg_match( '/class="[^"]*elodin-recently-edited-title-link[^"]*"[^>]*data-url="([^"]*)"/', $html, $view_matches ) ) {
+			$view_url = html_entity_decode( $view_matches[1], ENT_QUOTES, 'UTF-8' );
+		}
+		if ( preg_match( '/class="[^"]*elodin-recently-edited-edit[^"]*"[^>]*data-url="([^"]*)"/', $html, $edit_matches ) ) {
+			$edit_url = html_entity_decode( $edit_matches[1], ENT_QUOTES, 'UTF-8' );
+		}
+
+		if ( '' === $resource_type ) {
+			$resource_type = $post_id ? 'post' : 'row';
+		}
+		if ( '' === $resource_id ) {
+			$resource_id = $post_id ? (string) $post_id : (string) $index;
+		}
+
+		$records[] = array(
+			'id'           => $resource_type . ':' . $resource_id,
+			'html'         => $html,
+			'group'        => $group,
+			'postType'     => $post_type,
+			'searchText'   => $search_text,
+			'modified'     => $modified,
+			'postId'       => $post_id,
+			'resourceType' => $resource_type,
+			'resourceId'   => $resource_id,
+			'viewUrl'      => $view_url,
+			'editUrl'      => $edit_url,
+			'pinned'       => false !== strpos( $html, 'elodin-recently-edited-pin is-pinned' ),
+			'current'      => false !== strpos( $html, 'elodin-recently-edited-row--current' ),
+		);
+	}
+
+	return $records;
+}
+
+/**
  * Rebuild rendered menu fragments in the background.
  *
  * @since 1.4.2
@@ -610,6 +782,7 @@ function elodin_recently_edited_prepare_menu_query_args( $args ) {
 			'suppress_filters'             => true,
 			'tribe_suppress_query_filters' => true,
 			'update_post_term_cache'        => false,
+			'update_post_meta_cache'        => false,
 		)
 	);
 
@@ -1143,7 +1316,7 @@ function elodin_recently_edited_get_post_row( $post, $pinned_ids, $group = 'all'
 		$author_name = $author->display_name;
 	}
 
-	$last_editor_id = get_post_meta( $post->ID, '_edit_last', true );
+	$last_editor_id = elodin_recently_edited_get_menu_row_meta( $post->ID, '_edit_last' );
 	if ( $last_editor_id ) {
 		$last_editor = get_userdata( intval( $last_editor_id ) );
 		if ( $last_editor ) {
@@ -1364,6 +1537,16 @@ function elodin_recently_edited_get_canonical_post_rows( $type_groups, $pinned_i
 		return $rows;
 	}
 
+	$posts_to_prime = array();
+	foreach ( $type_groups as $type_group ) {
+		$posts_to_prime = array_merge(
+			$posts_to_prime,
+			isset( $type_group['pinned'] ) && is_array( $type_group['pinned'] ) ? $type_group['pinned'] : array(),
+			isset( $type_group['recent'] ) && is_array( $type_group['recent'] ) ? $type_group['recent'] : array()
+		);
+	}
+	elodin_recently_edited_prime_menu_row_meta( $posts_to_prime );
+
 	foreach ( $type_groups as $pt_slug => $type_group ) {
 		if ( empty( $type_group['pinned'] ) && empty( $type_group['recent'] ) ) {
 			continue;
@@ -1500,6 +1683,7 @@ function elodin_recently_edited_add_cached_admin_bar_menu( $wp_admin_bar, $menu_
 	$main_href       = isset( $cached_menu['main_href'] ) ? (string) $cached_menu['main_href'] : '#';
 	$post_type_links = isset( $cached_menu['post_type_links'] ) && is_array( $cached_menu['post_type_links'] ) ? $cached_menu['post_type_links'] : array();
 	$post_list_rows  = isset( $cached_menu['post_list_rows'] ) && is_array( $cached_menu['post_list_rows'] ) ? $cached_menu['post_list_rows'] : array();
+	$GLOBALS['elodin_recently_edited_virtual_rows'] = elodin_recently_edited_get_virtual_row_records( $post_list_rows );
 
 	$wp_admin_bar->add_menu(
 		array(
@@ -1567,7 +1751,7 @@ function elodin_recently_edited_add_cached_admin_bar_menu( $wp_admin_bar, $menu_
 		array(
 			'id'     => $menu_id . '-post-list',
 			'parent' => $menu_id,
-			'title'  => '<div class="elodin-recently-edited-post-list">' . implode( '', $post_list_rows ) . '</div>',
+			'title'  => '<div class="elodin-recently-edited-post-list"></div>',
 			'href'   => false,
 			'meta'   => array( 'class' => 'elodin-recently-edited-post-list-item' ),
 		)
@@ -1932,12 +2116,13 @@ function elodin_recently_edited_admin_bar( $wp_admin_bar ) {
 	$current_value   = elodin_recently_edited_decorate_cached_menu( $cached_value, $current_post_type, $current_post_id, $user_pinned_ids, $user_review_states );
 	$post_type_links = isset( $current_value['post_type_links'] ) ? $current_value['post_type_links'] : $post_type_links;
 	$post_list_rows  = isset( $current_value['post_list_rows'] ) ? $current_value['post_list_rows'] : $post_list_rows;
+	$GLOBALS['elodin_recently_edited_virtual_rows'] = elodin_recently_edited_get_virtual_row_records( $post_list_rows );
 
 	$wp_admin_bar->add_menu(
 		array(
 			'id'     => $menu_id . '-post-list',
 			'parent' => $menu_id,
-			'title'  => '<div class="elodin-recently-edited-post-list">' . implode( '', $post_list_rows ) . '</div>',
+			'title'  => '<div class="elodin-recently-edited-post-list"></div>',
 			'href'   => false,
 			'meta'   => array( 'class' => 'elodin-recently-edited-post-list-item' ),
 		)
@@ -1961,6 +2146,12 @@ function elodin_recently_edited_register_rest_routes() {
 			'permission_callback' => function () {
 				return is_user_logged_in() && elodin_recently_edited_runtime_enabled();
 			},
+			'args'                => array(
+				'refresh' => array(
+					'required'          => false,
+					'sanitize_callback' => 'rest_sanitize_boolean',
+				),
+			),
 		)
 	);
 
@@ -2334,6 +2525,11 @@ function elodin_recently_edited_rest_get_menu( $request ) {
 		);
 	}
 
+	// Gutenberg sends this only after a successful non-autosave editor save.
+	if ( $request->get_param( 'refresh' ) && current_user_can( 'edit_posts' ) ) {
+		elodin_recently_edited_clear_menu_cache();
+	}
+
 	if ( ! class_exists( 'WP_Admin_Bar' ) ) {
 		require_once ABSPATH . WPINC . '/class-wp-admin-bar.php';
 	}
@@ -2381,10 +2577,17 @@ function elodin_recently_edited_rest_get_menu( $request ) {
 			'href'  => isset( $node->href ) ? $node->href : false,
 		);
 	}
+	if ( isset( $nodes['postList'] ) ) {
+		$nodes['postList']['title'] = '<div class="elodin-recently-edited-post-list"></div>';
+	}
+	$virtual_rows = isset( $GLOBALS['elodin_recently_edited_virtual_rows'] ) && is_array( $GLOBALS['elodin_recently_edited_virtual_rows'] )
+		? $GLOBALS['elodin_recently_edited_virtual_rows']
+		: array();
 
 	return rest_ensure_response(
 		array(
 			'nodes'       => $nodes,
+			'rows'        => $virtual_rows,
 			'cacheSchema' => elodin_recently_edited_get_client_menu_cache_version(),
 		)
 	);

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.1 - 2026-07-22
+- Changed generic post saves, including REST and AJAX imports, to set one lightweight dirty marker instead of clearing and rebuilding the index after every request.
+- Deferred stale-cache invalidation until an administrator next loads a page, while preserving an immediate refresh specifically after successful manual Gutenberg saves.
+- Added a cache generation to server-rendered menu keys and deduplicated repeated invalidations across an entire batch of content updates.
+- Kept complete post metadata out of menu-index queries and bulk-loaded only the Elementor mode and last-editor keys needed for row rendering; the Meta Inspector still loads complete metadata only after it is opened.
+- Prevented large menu indexes from blocking the Meta Inspector by detaching the hidden row subtree while inspecting metadata and rendering inspector rows in one batched DOM insertion.
+- Virtualized the Recently Edited result list so large sites keep only the visible rows plus a small overscan buffer in the DOM while preserving search, groups, keyboard navigation, and inline actions.
+- Stored oversized browser indexes in IndexedDB when they exceed safe localStorage limits, preventing large sites from re-fetching the full menu on every backend page load.
+- Kept the initial-index prompt hidden while an automatic cache load is healthy so administrators do not see a misleading rebuild flash during navigation.
+- Kept the browser index site-wide and user-scoped while applying the current post and content-type highlights from each page locally.
+- Used the previous browser index immediately after a real cache invalidation while refreshing it quietly in the background.
+- Restored a distinct keyboard-selection highlight for starred rows, including when several starred items appear together.
+
 ## 1.8.0 - 2026-07-21
 - Refreshed the visible Recently Edited menu in place after successful block-editor saves so the saved item immediately moves to its newly sorted position.
 - Made menu-cache invalidation load during all WordPress REST and AJAX requests so block-editor, page, and custom post type saves consistently clear and rebuild the index.

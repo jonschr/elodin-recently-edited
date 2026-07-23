@@ -17,10 +17,20 @@ jQuery(function ($) {
 	var metaInspectorFullKeys = {};
 	var metaInspectorRequest = null;
 	var metaInspectorTrigger = null;
-	var shellRevealTimer = null;
-	var shellRevealDelayMs = 700;
+	var metaInspectorSubmenu = null;
+	var clientCacheDatabasePromise = null;
 	var editorSaveRefreshTimer = null;
 	var rowIndex = null;
+	var virtualRows = [];
+	var virtualFilteredRows = [];
+	var virtualDisplayItems = [];
+	var virtualDisplayOffsets = [];
+	var virtualSelectedId = '';
+	var virtualScrollFrame = null;
+	var virtualRenderedSignature = '';
+	var virtualRowHeight = 30;
+	var virtualHeaderHeight = 20;
+	var virtualOverscanPixels = 300;
 	var isMac = /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || '');
 
 	function storageKey(menuId) {
@@ -72,6 +82,16 @@ jQuery(function ($) {
 
 	function updateCurrentRowHighlight($menu) {
 		var currentPostId = parseInt(ElodinRecentlyEdited.currentPostId || 0, 10);
+		if (virtualRows.length) {
+			virtualRows.forEach(function (record) {
+				record.current =
+					currentPostId > 0 &&
+					String(record.postId || record.resourceId) === String(currentPostId);
+			});
+			renderVirtualWindow(true);
+			return;
+		}
+
 		$menu
 			.find('.elodin-recently-edited-row--current')
 			.removeClass('elodin-recently-edited-row--current');
@@ -149,9 +169,123 @@ jQuery(function ($) {
 	function getClientCacheKey() {
 		return (
 			(ElodinRecentlyEdited.cacheKey || 'elodin_recently_edited_menu') +
+			'_u' +
+			(ElodinRecentlyEdited.currentUserId || 0) +
 			'_v' +
-			(ElodinRecentlyEdited.cacheSchema || 1)
+			(ElodinRecentlyEdited.cacheSchema || 1) +
+			'_f' +
+			(ElodinRecentlyEdited.cacheFormat || 1)
 		);
+	}
+
+	function openClientCacheDatabase() {
+		if (!window.indexedDB) {
+			return Promise.reject(new Error('IndexedDB is unavailable.'));
+		}
+		if (clientCacheDatabasePromise) {
+			return clientCacheDatabasePromise;
+		}
+
+		clientCacheDatabasePromise = new Promise(function (resolve, reject) {
+			var request = window.indexedDB.open(
+				'elodin_recently_edited_cache',
+				1,
+			);
+			request.onupgradeneeded = function () {
+				var database = request.result;
+				if (!database.objectStoreNames.contains('menus')) {
+					database.createObjectStore('menus', { keyPath: 'key' });
+				}
+			};
+			request.onsuccess = function () {
+				resolve(request.result);
+			};
+			request.onerror = function () {
+				reject(request.error || new Error('Unable to open the menu cache.'));
+			};
+		});
+
+		return clientCacheDatabasePromise;
+	}
+
+	function readClientMenuCacheFromDatabase() {
+		return openClientCacheDatabase()
+			.then(function (database) {
+				return new Promise(function (resolve, reject) {
+					var transaction = database.transaction('menus', 'readonly');
+					var request = transaction.objectStore('menus').getAll();
+					request.onsuccess = function () {
+						var cachedItems = Array.isArray(request.result)
+							? request.result.filter(function (cached) {
+									return (
+										cached &&
+										cached.nodes &&
+										Array.isArray(cached.rows)
+									);
+								})
+							: [];
+						if (!cachedItems.length) {
+							resolve(null);
+							return;
+						}
+
+						var currentKey = getClientCacheKey();
+						var cached = cachedItems.find(function (item) {
+							return item.key === currentKey;
+						});
+						if (!cached) {
+							cachedItems.sort(function (a, b) {
+								return (b.createdAt || 0) - (a.createdAt || 0);
+							});
+							cached = cachedItems[0];
+						}
+
+						resolve({
+							cached: cached,
+							fresh: cached.key === currentKey,
+						});
+					};
+					request.onerror = function () {
+						reject(request.error || new Error('Unable to read the menu cache.'));
+					};
+				});
+			})
+			.catch(function () {
+				return null;
+			});
+	}
+
+	function writeClientMenuCacheToDatabase(cached) {
+		return openClientCacheDatabase()
+			.then(function (database) {
+				return new Promise(function (resolve, reject) {
+					var transaction = database.transaction('menus', 'readwrite');
+					var store = transaction.objectStore('menus');
+					store.clear();
+					store.put(cached);
+					transaction.oncomplete = function () {
+						resolve(true);
+					};
+					transaction.onerror = function () {
+						reject(transaction.error || new Error('Unable to write the menu cache.'));
+					};
+					transaction.onabort = transaction.onerror;
+				});
+			})
+			.catch(function () {
+				return false;
+			});
+	}
+
+	function clearClientMenuCacheDatabase() {
+		openClientCacheDatabase()
+			.then(function (database) {
+				var transaction = database.transaction('menus', 'readwrite');
+				transaction.objectStore('menus').clear();
+			})
+			.catch(function () {
+				// IndexedDB may be unavailable or disabled.
+			});
 	}
 
 	function readClientMenuCache() {
@@ -162,7 +296,7 @@ jQuery(function ($) {
 			}
 
 			var cached = JSON.parse(raw);
-			if (!cached || !cached.nodes) {
+			if (!cached || !cached.nodes || !Array.isArray(cached.rows)) {
 				return null;
 			}
 
@@ -172,17 +306,34 @@ jQuery(function ($) {
 		}
 	}
 
-	function writeClientMenuCache(nodes) {
+	function writeClientMenuCache(nodes, rows) {
+		var cached = {
+			key: getClientCacheKey(),
+			createdAt: Date.now(),
+			nodes: nodes,
+			rows: Array.isArray(rows) ? rows : [],
+		};
+		var storedLocally = false;
+
 		try {
-			window.localStorage.setItem(
-				getClientCacheKey(),
-				JSON.stringify({
-					createdAt: Date.now(),
-					nodes: nodes,
-				}),
-			);
+			var serialized = JSON.stringify(cached);
+			// localStorage is the fastest synchronous path for small sites, but
+			// common browser quotas reject large indexes around 5 MB.
+			if (serialized.length <= 3500000) {
+				window.localStorage.setItem(getClientCacheKey(), serialized);
+				storedLocally = true;
+			}
 		} catch (error) {
 			// Storage can fail in private browsing or when quota is full.
+		}
+
+		if (!storedLocally) {
+			try {
+				window.localStorage.removeItem(getClientCacheKey());
+			} catch (error) {
+				// no-op
+			}
+			writeClientMenuCacheToDatabase(cached);
 		}
 	}
 
@@ -193,6 +344,7 @@ jQuery(function ($) {
 		} catch (error) {
 			// no-op
 		}
+		clearClientMenuCacheDatabase();
 	}
 
 	function announce(message) {
@@ -224,9 +376,15 @@ jQuery(function ($) {
 		}
 	}
 
-	function hydrateRecentlyEditedMenu(nodes) {
+	function hydrateRecentlyEditedMenu(nodes, rows) {
 		var $menu = $('#wp-admin-bar-recently-edited');
-		if (!$menu.length || !nodes || !nodes.postList || !nodes.types) {
+		if (
+			!$menu.length ||
+			!nodes ||
+			!nodes.postList ||
+			!nodes.types ||
+			!Array.isArray(rows)
+		) {
 			return false;
 		}
 
@@ -239,6 +397,8 @@ jQuery(function ($) {
 		replaceAdminBarNode('recently-edited-no-matches', nodes.noMatches.title);
 		replaceAdminBarNode('recently-edited-column-header', nodes.columnHeader.title);
 		replaceAdminBarNode('recently-edited-post-list', nodes.postList.title);
+		initializeVirtualRows(rows);
+		updateCurrentTypePill($menu);
 		invalidateRowIndex();
 		reconcileReviewControls($menu);
 		updateSearchPlaceholder();
@@ -251,10 +411,6 @@ jQuery(function ($) {
 			.find('.elodin-recently-edited-shell-item')
 			.removeClass('elodin-recently-edited-shell-item');
 
-		if (shellRevealTimer) {
-			window.clearTimeout(shellRevealTimer);
-			shellRevealTimer = null;
-		}
 		$menu.removeClass(
 			'elodin-recently-edited-is-lazy elodin-recently-edited-shell-pending',
 		);
@@ -267,6 +423,22 @@ jQuery(function ($) {
 		var storedSearch = $menu.data('restoreSearch');
 		if (storedGroup) {
 			switchRelatedGroup($menu, storedGroup);
+		} else {
+			var currentGroup = String(
+				ElodinRecentlyEdited.currentPostType || '',
+			);
+			if (
+				currentGroup &&
+				$menu.find(
+					'.elodin-related-pill[data-related-target="' +
+						currentGroup +
+						'"]',
+				).length
+			) {
+				switchRelatedGroup($menu, currentGroup);
+			} else {
+				switchRelatedGroup($menu, 'all');
+			}
 		}
 		$menu.removeData('restoreGroup');
 		if (typeof storedSearch === 'string' && storedSearch !== '') {
@@ -288,7 +460,27 @@ jQuery(function ($) {
 			return false;
 		}
 
-		return hydrateRecentlyEditedMenu(cached.nodes);
+		return hydrateRecentlyEditedMenu(cached.nodes, cached.rows);
+	}
+
+	function hydrateRecentlyEditedMenuFromPersistentCache() {
+		if (hydrateRecentlyEditedMenuFromCache()) {
+			return Promise.resolve({ hydrated: true, fresh: true });
+		}
+
+		return readClientMenuCacheFromDatabase().then(function (result) {
+			if (!result || !result.cached) {
+				return { hydrated: false, fresh: false };
+			}
+
+			return {
+				hydrated: hydrateRecentlyEditedMenu(
+					result.cached.nodes,
+					result.cached.rows,
+				),
+				fresh: result.fresh,
+			};
+		});
 	}
 
 	function revealLazyShellIfStillNeeded() {
@@ -300,26 +492,18 @@ jQuery(function ($) {
 		$menu.removeClass('elodin-recently-edited-shell-pending');
 	}
 
-	function scheduleLazyShellReveal(delay) {
-		if (shellRevealTimer) {
-			window.clearTimeout(shellRevealTimer);
-		}
-
-		shellRevealTimer = window.setTimeout(function () {
-			shellRevealTimer = null;
-			revealLazyShellIfStillNeeded();
-		}, delay);
-	}
-
 	function scheduleMenuIndexBuild() {
-		if (hydrateRecentlyEditedMenuFromCache()) {
-			return;
-		}
+		hydrateRecentlyEditedMenuFromPersistentCache().then(function (cacheState) {
+			if (cacheState.hydrated && cacheState.fresh) {
+				return;
+			}
 
-		scheduleLazyShellReveal(shellRevealDelayMs);
-		window.setTimeout(function () {
-			loadRecentlyEditedMenu();
-		}, 0);
+			window.setTimeout(function () {
+				loadRecentlyEditedMenu({
+					force: cacheState.hydrated,
+				});
+			}, 0);
+		});
 	}
 
 	function invalidateRowIndex() {
@@ -365,6 +549,375 @@ jQuery(function ($) {
 		);
 	}
 
+	function escapeVirtualAttribute(value) {
+		return String(value || '')
+			.replace(/&/g, '&amp;')
+			.replace(/"/g, '&quot;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;');
+	}
+
+	function normalizeVirtualRecord(record, index) {
+		record = record && typeof record === 'object' ? record : {};
+		var resourceType = String(record.resourceType || (record.postId ? 'post' : 'row'));
+		var resourceId = String(record.resourceId || record.postId || index);
+
+		return {
+			id: String(record.id || resourceType + ':' + resourceId),
+			html: String(record.html || ''),
+			group: String(record.group || ''),
+			postType: String(record.postType || ''),
+			searchText: normalizeSearchText(record.searchText || ''),
+			modified: parseInt(record.modified || 0, 10),
+			postId: parseInt(record.postId || 0, 10),
+			resourceType: resourceType,
+			resourceId: resourceId,
+			viewUrl: String(record.viewUrl || ''),
+			editUrl: String(record.editUrl || ''),
+			pinned: Boolean(record.pinned),
+			current: Boolean(record.current),
+		};
+	}
+
+	function getVirtualList() {
+		return $('#wp-admin-bar-recently-edited .elodin-recently-edited-post-list').first();
+	}
+
+	function getVirtualRecordById(recordId) {
+		return virtualRows.find(function (record) {
+			return record.id === String(recordId || '');
+		}) || null;
+	}
+
+	function getVirtualRecordForElement(element) {
+		var item = element && element.closest
+			? element.closest('.elodin-recently-edited-list-item[data-virtual-id]')
+			: null;
+		return item ? getVirtualRecordById(item.getAttribute('data-virtual-id')) : null;
+	}
+
+	function getVirtualSelectionData(record) {
+		if (!record) {
+			return null;
+		}
+
+		return {
+			editUrl: record.editUrl,
+			group: record.postType || record.group || 'all',
+			resourceId: record.resourceId,
+			resourceType: record.resourceType,
+			searchText: record.searchText,
+			viewUrl: record.viewUrl,
+			visibleIndex: virtualFilteredRows.indexOf(record),
+		};
+	}
+
+	function sortVirtualRows() {
+		virtualRows.sort(function (a, b) {
+			if (a.pinned !== b.pinned) {
+				return a.pinned ? -1 : 1;
+			}
+			if (a.modified !== b.modified) {
+				return a.modified > b.modified ? -1 : 1;
+			}
+			return a.id.localeCompare(b.id);
+		});
+	}
+
+	function buildVirtualDisplayItems() {
+		virtualDisplayItems = [];
+		virtualDisplayOffsets = [];
+		var offset = 0;
+		var hasPinned = virtualFilteredRows.some(function (record) {
+			return record.pinned;
+		});
+		var addedRecentHeader = false;
+
+		virtualFilteredRows.forEach(function (record, index) {
+			if (index === 0 && record.pinned) {
+				virtualDisplayOffsets.push(offset);
+				virtualDisplayItems.push({
+					type: 'header',
+					label: (ElodinRecentlyEdited.strings || {}).starred || 'Starred',
+					height: virtualHeaderHeight,
+				});
+				offset += virtualHeaderHeight;
+			}
+			if (hasPinned && !record.pinned && !addedRecentHeader) {
+				addedRecentHeader = true;
+				virtualDisplayOffsets.push(offset);
+				virtualDisplayItems.push({
+					type: 'header',
+					label: (ElodinRecentlyEdited.strings || {}).recentlyEdited || 'Recently edited',
+					height: virtualHeaderHeight,
+				});
+				offset += virtualHeaderHeight;
+			}
+
+			virtualDisplayOffsets.push(offset);
+			virtualDisplayItems.push({
+				type: 'row',
+				record: record,
+				height: virtualRowHeight,
+			});
+			offset += virtualRowHeight;
+		});
+
+		virtualDisplayItems.totalHeight = offset;
+	}
+
+	function getVirtualItemIndexAtOffset(offset) {
+		var low = 0;
+		var high = virtualDisplayOffsets.length - 1;
+		var answer = 0;
+
+		while (low <= high) {
+			var middle = Math.floor((low + high) / 2);
+			if (virtualDisplayOffsets[middle] <= offset) {
+				answer = middle;
+				low = middle + 1;
+			} else {
+				high = middle - 1;
+			}
+		}
+
+		return answer;
+	}
+
+	function renderVirtualRecord(record) {
+		var html = String(record.html || '');
+		if (!html) {
+			return '';
+		}
+
+		return html.replace(
+			/^\s*<div\s/i,
+			'<div data-virtual-id="' + escapeVirtualAttribute(record.id) + '" ',
+		);
+	}
+
+	function renderVirtualWindow(force) {
+		if (!virtualRows.length) {
+			return;
+		}
+
+		var $list = getVirtualList();
+		if (!$list.length || getActiveGroup($('#wp-admin-bar-recently-edited')) === 'media') {
+			return;
+		}
+
+		var list = $list[0];
+		var scrollTop = list.scrollTop || 0;
+		var viewportHeight = list.clientHeight || 320;
+		var startOffset = Math.max(0, scrollTop - virtualOverscanPixels);
+		var endOffset = scrollTop + viewportHeight + virtualOverscanPixels;
+		var startIndex = virtualDisplayItems.length
+			? getVirtualItemIndexAtOffset(startOffset)
+			: 0;
+		var endIndex = startIndex;
+
+		while (
+			endIndex < virtualDisplayItems.length &&
+			virtualDisplayOffsets[endIndex] < endOffset
+		) {
+			endIndex += 1;
+		}
+		var renderSignature =
+			getActiveGroup($('#wp-admin-bar-recently-edited')) +
+			':' +
+			startIndex +
+			':' +
+			endIndex +
+			':' +
+			virtualSelectedId;
+		if (!force && renderSignature === virtualRenderedSignature) {
+			return;
+		}
+		virtualRenderedSignature = renderSignature;
+
+		var topHeight = virtualDisplayOffsets[startIndex] || 0;
+		var renderedEnd = endIndex > 0
+			? (virtualDisplayOffsets[endIndex - 1] || 0) +
+				(virtualDisplayItems[endIndex - 1] ? virtualDisplayItems[endIndex - 1].height : 0)
+			: 0;
+		var bottomHeight = Math.max(
+			0,
+			(virtualDisplayItems.totalHeight || 0) - renderedEnd,
+		);
+		var html = '<div class="elodin-recently-edited-virtual-spacer" style="height:' +
+			topHeight +
+			'px"></div>';
+
+		virtualDisplayItems.slice(startIndex, endIndex).forEach(function (item) {
+			if (item.type === 'header') {
+				html +=
+					'<div class="elodin-recently-edited-virtual-header">' +
+					escapeVirtualAttribute(item.label) +
+					'</div>';
+				return;
+			}
+			html += renderVirtualRecord(item.record);
+		});
+		html +=
+			'<div class="elodin-recently-edited-virtual-spacer" style="height:' +
+			bottomHeight +
+			'px"></div>';
+
+		$list.html(html).addClass('is-virtualized');
+		$list
+			.children('.elodin-recently-edited-list-item')
+			.addClass('is-active')
+			.each(function () {
+				var record = getVirtualRecordForElement(this);
+				$(this)
+					.toggleClass('is-starred', Boolean(record && record.pinned))
+					.toggleClass(
+						'is-keyboard-selected',
+						Boolean(record && record.id === virtualSelectedId),
+					);
+				$(this)
+					.find('.elodin-recently-edited-row')
+					.toggleClass(
+						'elodin-recently-edited-row--current',
+						Boolean(record && record.current),
+					);
+			});
+		invalidateRowIndex();
+		reconcileReviewControls($('#wp-admin-bar-recently-edited'));
+	}
+
+	function rebuildVirtualFilter(resetScroll) {
+		if (!virtualRows.length) {
+			return;
+		}
+
+		var $menu = $('#wp-admin-bar-recently-edited');
+		var activeGroup = getActiveGroup($menu);
+		var query = normalizeSearchText(
+			$menu.find('.elodin-recently-edited-search-input').first().val(),
+		);
+
+		virtualFilteredRows = activeGroup === 'media'
+			? []
+			: virtualRows.filter(function (record) {
+				return (
+					indexedRowMatchesGroup(record, activeGroup) &&
+					(!query || record.searchText.indexOf(query) !== -1)
+				);
+			});
+		buildVirtualDisplayItems();
+		virtualRenderedSignature = '';
+
+		var $list = getVirtualList();
+		if (resetScroll && $list.length) {
+			$list.scrollTop(0);
+		}
+		renderVirtualWindow();
+
+		var $noMatchesItem = $menu.find('.elodin-recently-edited-no-matches');
+		$noMatchesItem.toggle(Boolean(query) && virtualFilteredRows.length === 0);
+	}
+
+	function bindVirtualScroll() {
+		var $list = getVirtualList();
+		if (!$list.length) {
+			return;
+		}
+
+		$list.off('scroll.elodinRecentlyEditedVirtual');
+		$list.on('scroll.elodinRecentlyEditedVirtual', function () {
+			if (virtualScrollFrame) {
+				return;
+			}
+			virtualScrollFrame = window.requestAnimationFrame(function () {
+				virtualScrollFrame = null;
+				renderVirtualWindow();
+				saveScrollPosition('wp-admin-bar-recently-edited');
+			});
+		});
+	}
+
+	function initializeVirtualRows(rows) {
+		virtualRows = rows.map(normalizeVirtualRecord).filter(function (record) {
+			return record.html && record.id;
+		});
+		virtualSelectedId = '';
+		virtualRenderedSignature = '';
+		sortVirtualRows();
+		rebuildVirtualFilter(false);
+		bindVirtualScroll();
+	}
+
+	function ensureVirtualRecordRendered(record) {
+		if (!record) {
+			return null;
+		}
+
+		var index = virtualDisplayItems.findIndex(function (item) {
+			return item.type === 'row' && item.record === record;
+		});
+		var $list = getVirtualList();
+		if (index >= 0 && $list.length) {
+			var top = virtualDisplayOffsets[index] || 0;
+			var bottom = top + virtualRowHeight;
+			var viewportTop = $list.scrollTop();
+			var viewportBottom = viewportTop + ($list[0].clientHeight || 320);
+			if (top < viewportTop) {
+				$list.scrollTop(top);
+			} else if (bottom > viewportBottom) {
+				$list.scrollTop(Math.max(0, bottom - ($list[0].clientHeight || 320)));
+			}
+		}
+
+		renderVirtualWindow();
+		var item = getVirtualList()
+			.children('.elodin-recently-edited-list-item')
+			.filter(function () {
+				return this.getAttribute('data-virtual-id') === record.id;
+			})
+			.get(0);
+		return item
+			? {
+					record: record,
+					item: item,
+					row: item.querySelector('.elodin-recently-edited-row'),
+					group: record.group,
+					postType: record.postType,
+					searchText: record.searchText,
+				}
+			: null;
+	}
+
+	function syncVirtualRecordFromRow($row) {
+		if (!virtualRows.length || !$row || !$row.length) {
+			return null;
+		}
+
+		var record = getVirtualRecordForElement($row[0]);
+		var item = $row.closest('.elodin-recently-edited-list-item')[0];
+		if (!record || !item) {
+			return null;
+		}
+
+		var clone = item.cloneNode(true);
+		clone.removeAttribute('data-virtual-id');
+		clone.classList.remove(
+			'is-active',
+			'is-starred',
+			'is-keyboard-selected',
+			'is-first-starred',
+			'is-first-recent',
+		);
+		clone.removeAttribute('data-section-label');
+		record.html = clone.outerHTML;
+		record.searchText = normalizeSearchText($row.attr('data-search-text') || '');
+		record.postType = String($row.attr('data-post-type') || record.postType);
+		record.group = String($row.attr('data-related-group') || record.group);
+		record.modified = parseInt($row.attr('data-modified') || record.modified || 0, 10);
+		record.pinned = $row.find('.elodin-recently-edited-pin.is-pinned').length > 0;
+		return record;
+	}
+
 	function loadRecentlyEditedMenu(options) {
 		options = options || {};
 		var $menu = $('#wp-admin-bar-recently-edited');
@@ -382,10 +935,12 @@ jQuery(function ($) {
 		menuLoadRequest = $.ajax({
 			url: ElodinRecentlyEdited.menuRestUrl,
 			method: 'GET',
+			timeout: 15000,
 			data: {
 				current_post_type: ElodinRecentlyEdited.currentPostType || '',
 				current_post_id: ElodinRecentlyEdited.currentPostId || 0,
 				preload: options.preload ? 1 : 0,
+				refresh: options.refresh ? 1 : 0,
 			},
 			beforeSend: function (xhr) {
 				xhr.setRequestHeader('X-WP-Nonce', ElodinRecentlyEdited.restNonce);
@@ -399,7 +954,8 @@ jQuery(function ($) {
 				}
 
 				var nodes = response && response.nodes ? response.nodes : {};
-				if (!nodes.postList || !nodes.types) {
+				var rows = response && Array.isArray(response.rows) ? response.rows : null;
+				if (!nodes.postList || !nodes.types || !rows) {
 					throw new Error('Missing Recently Edited menu nodes.');
 				}
 
@@ -412,8 +968,8 @@ jQuery(function ($) {
 					ElodinRecentlyEdited.cacheSchema = responseCacheSchema;
 				}
 
-				writeClientMenuCache(nodes);
-				hydrateRecentlyEditedMenu(nodes);
+				writeClientMenuCache(nodes, rows);
+				hydrateRecentlyEditedMenu(nodes, rows);
 			})
 			.fail(function () {
 				revealLazyShellIfStillNeeded();
@@ -460,7 +1016,7 @@ jQuery(function ($) {
 			);
 			saveScrollPosition($menu.attr('id'));
 			clearClientMenuCache();
-			loadRecentlyEditedMenu({ force: true });
+			loadRecentlyEditedMenu({ force: true, refresh: true });
 		}, 100);
 	}
 
@@ -783,6 +1339,34 @@ jQuery(function ($) {
 		return $panel;
 	}
 
+	/**
+	 * Keep the large menu index out of the live DOM while inspecting metadata.
+	 *
+	 * Large sites can render thousands of row controls. Leaving that subtree
+	 * attached while toggling the inspector state forces the browser to restyle
+	 * every row even though the entire index is hidden.
+	 */
+	function detachMenuForMetaInspector($menu) {
+		if (metaInspectorSubmenu && metaInspectorSubmenu.length) {
+			return;
+		}
+
+		var $wrapper = $menu.children('.ab-sub-wrapper').first();
+		var $submenu = $wrapper.children('.ab-submenu').first();
+		if ($submenu.length) {
+			metaInspectorSubmenu = $submenu.detach();
+		}
+	}
+
+	function restoreMenuAfterMetaInspector($menu) {
+		if (!metaInspectorSubmenu || !metaInspectorSubmenu.length) {
+			return;
+		}
+
+		$menu.children('.ab-sub-wrapper').first().prepend(metaInspectorSubmenu);
+		metaInspectorSubmenu = null;
+	}
+
 	function buildMetaInspectorShell(postId, postTitle) {
 		var $panel = getMetaInspector().empty().attr('data-post-id', postId);
 		var $header = $('<header>', { class: 'elodin-recently-edited-meta-header' }).appendTo($panel);
@@ -905,9 +1489,11 @@ jQuery(function ($) {
 	function renderMetaInspector(response) {
 		var $panel = getMetaInspector();
 		var $list = $panel.find('.elodin-recently-edited-meta-list').empty();
+		var fragment = document.createDocumentFragment();
 		var items = response && Array.isArray(response.items) ? response.items : [];
 		var postId = response && response.post ? response.post.id : parseInt($panel.attr('data-post-id'), 10);
 		var fullKeys = metaInspectorFullKeys[postId] || {};
+		var query = String($panel.find('.elodin-recently-edited-meta-search').val() || '');
 
 		items.forEach(function (item) {
 			var searchable = [item.key]
@@ -917,7 +1503,7 @@ jQuery(function ($) {
 				class: 'elodin-recently-edited-meta-item',
 				'data-meta-key': item.key,
 				'data-search-text': normalizeSearchText(searchable),
-			}).appendTo($list);
+			}).appendTo(fragment);
 			if (canRenderCompactMetaItem(item)) {
 				renderCompactMetaItem($item, item);
 				return;
@@ -943,11 +1529,16 @@ jQuery(function ($) {
 		$('<div>', {
 			class: 'elodin-recently-edited-meta-empty',
 			text: (ElodinRecentlyEdited.strings || {}).noMetaMatches || 'No meta keys match this search.',
-		}).toggle(items.length === 0).appendTo($list);
+		}).toggle(items.length === 0).appendTo(fragment);
+		if ($list[0]) {
+			$list[0].appendChild(fragment);
+		}
 		$panel.find('.elodin-recently-edited-meta-summary').text(
 			items.length === 1 ? '1 meta key' : items.length + ' meta keys',
 		);
-		filterMetaInspector($panel.find('.elodin-recently-edited-meta-search').val());
+		if (query) {
+			filterMetaInspector(query);
+		}
 	}
 
 	function filterMetaInspector(query) {
@@ -990,6 +1581,7 @@ jQuery(function ($) {
 		var postTitle = $trigger.attr('data-post-title') || 'Post #' + postId;
 		var $menu = $('#wp-admin-bar-recently-edited');
 		metaInspectorTrigger = $trigger;
+		detachMenuForMetaInspector($menu);
 		$menu.addClass('elodin-recently-edited-meta-view');
 		var $panel = buildMetaInspectorShell(postId, postTitle);
 		$panel.find('.elodin-recently-edited-meta-summary').text(
@@ -1032,7 +1624,12 @@ jQuery(function ($) {
 			metaInspectorRequest = null;
 		}
 		$menu.removeClass('elodin-recently-edited-meta-view');
-		getMetaInspector().remove();
+		$menu
+			.children('.ab-sub-wrapper')
+			.first()
+			.children('.elodin-recently-edited-meta-inspector')
+			.remove();
+		restoreMenuAfterMetaInspector($menu);
 		if (restoreFocus && metaInspectorTrigger && metaInspectorTrigger.length) {
 			metaInspectorTrigger.focus();
 		}
@@ -1113,6 +1710,24 @@ jQuery(function ($) {
 		var activeGroup = getActiveGroup($menu);
 		updateSearchClearButton($menu);
 
+		if (virtualRows.length) {
+			if (activeGroup === 'media') {
+				virtualFilteredRows = [];
+				virtualDisplayItems = [];
+				virtualDisplayOffsets = [];
+				getVirtualList().empty();
+				$menu.find('.elodin-recently-edited-no-matches').hide();
+				filterMediaItems(query);
+				return;
+			}
+
+			rebuildVirtualFilter(false);
+			if (!options.skipSelection) {
+				selectFirstVisibleRow();
+			}
+			return;
+		}
+
 		if (activeGroup === 'media') {
 			getRowIndex().forEach(function (indexedRow) {
 				indexedRow.item.style.display = 'none';
@@ -1179,6 +1794,12 @@ jQuery(function ($) {
 	}
 
 	function sortRowsByPinnedState() {
+		if (virtualRows.length) {
+			sortVirtualRows();
+			rebuildVirtualFilter(false);
+			return;
+		}
+
 		var $list = $('#wp-admin-bar-recently-edited .elodin-recently-edited-post-list').first();
 		if (!$list.length) {
 			return;
@@ -1210,6 +1831,10 @@ jQuery(function ($) {
 	}
 
 	function updateSectionLabels() {
+		if (virtualRows.length) {
+			return;
+		}
+
 		var $menu = $('#wp-admin-bar-recently-edited');
 		var $items = $menu.find('.elodin-recently-edited-list-item');
 		$items
@@ -1251,6 +1876,30 @@ jQuery(function ($) {
 			.find('.elodin-recently-edited-list-item.is-keyboard-selected')
 			.removeClass('is-keyboard-selected');
 
+		if (virtualRows.length) {
+			var record = indexedRow && (indexedRow.record || indexedRow);
+			if (!record || !record.id) {
+				virtualSelectedId = '';
+				sessionStorage.removeItem(selectionStorageKey($menu.attr('id')));
+				renderVirtualWindow();
+				return;
+			}
+
+			virtualSelectedId = record.id;
+			var rendered = ensureVirtualRecordRendered(record);
+			sessionStorage.setItem(
+				selectionStorageKey($menu.attr('id')),
+				JSON.stringify(getVirtualSelectionData(record)),
+			);
+			if ($menu.hasClass('hover')) {
+				sessionStorage.setItem(storageKey($menu.attr('id')), 'true');
+			}
+			if (rendered && rendered.item) {
+				rendered.item.classList.add('is-keyboard-selected');
+			}
+			return;
+		}
+
 		if (!indexedRow || !indexedRow.item) {
 			sessionStorage.removeItem(selectionStorageKey($menu.attr('id')));
 			return;
@@ -1265,10 +1914,19 @@ jQuery(function ($) {
 	}
 
 	function selectFirstVisibleRow() {
+		if (virtualRows.length) {
+			setSelectedIndexedRow(virtualFilteredRows[0] || null);
+			return;
+		}
 		setSelectedIndexedRow(getVisibleIndexedRows()[0]);
 	}
 
 	function selectCurrentVisibleRowOrFirst() {
+		if (virtualRows.length) {
+			setSelectedIndexedRow(getCurrentVisibleRow() || virtualFilteredRows[0] || null);
+			return;
+		}
+
 		var currentPostId = parseInt(ElodinRecentlyEdited.currentPostId || 0, 10);
 		var currentRow = getVisibleIndexedRows().find(function (indexedRow) {
 			if (indexedRow.row.classList.contains('elodin-recently-edited-row--current')) {
@@ -1292,6 +1950,16 @@ jQuery(function ($) {
 	function getCurrentVisibleRow() {
 		var currentPostId = parseInt(ElodinRecentlyEdited.currentPostId || 0, 10);
 
+		if (virtualRows.length) {
+			return virtualFilteredRows.find(function (record) {
+				return (
+					record.current ||
+					(currentPostId > 0 &&
+						String(record.postId || record.resourceId) === String(currentPostId))
+				);
+			});
+		}
+
 		return getVisibleIndexedRows().find(function (indexedRow) {
 			if (indexedRow.row.classList.contains('elodin-recently-edited-row--current')) {
 				return true;
@@ -1310,6 +1978,13 @@ jQuery(function ($) {
 	}
 
 	function getRowSelectionData($row) {
+		if (virtualRows.length && $row && $row.length) {
+			var record = getVirtualRecordForElement($row[0]);
+			if (record) {
+				return getVirtualSelectionData(record);
+			}
+		}
+
 		var $resource = $row.find('[data-resource-type][data-resource-id]').first();
 		if ($resource.length) {
 			var visibleIndex = getVisibleIndexedRows().findIndex(function (indexedRow) {
@@ -1354,6 +2029,10 @@ jQuery(function ($) {
 	}
 
 	function getSelectedRowSelection(menuId) {
+		if (virtualRows.length) {
+			return getVirtualSelectionData(getVirtualRecordById(virtualSelectedId));
+		}
+
 		var $menu = $('#' + menuId);
 		var $selectedRow = $menu
 			.find('.elodin-recently-edited-list-item.is-keyboard-selected .elodin-recently-edited-row')
@@ -1409,6 +2088,61 @@ jQuery(function ($) {
 		var storedSelection = $menu.data('restoreSelection');
 		var storedTargetUrl = $menu.data('restoreTargetUrl');
 		var selectedRow = getCurrentVisibleRow() || null;
+
+		if (virtualRows.length) {
+			if (!selectedRow && storedSelection && storedSelection.resourceId && storedSelection.resourceType) {
+				selectedRow = virtualFilteredRows.find(function (record) {
+					return (
+						record.resourceType === String(storedSelection.resourceType) &&
+						record.resourceId === String(storedSelection.resourceId)
+					);
+				});
+			}
+
+			if (!selectedRow && storedTargetUrl) {
+				var normalizedVirtualTargetUrl = normalizeUrlForSelection(storedTargetUrl);
+				selectedRow = virtualFilteredRows.find(function (record) {
+					return (
+						normalizedVirtualTargetUrl &&
+						(normalizeUrlForSelection(record.viewUrl) === normalizedVirtualTargetUrl ||
+							normalizeUrlForSelection(record.editUrl) === normalizedVirtualTargetUrl)
+					);
+				});
+			}
+
+			if (!selectedRow && storedSelection && (storedSelection.viewUrl || storedSelection.editUrl)) {
+				var storedVirtualViewUrl = normalizeUrlForSelection(storedSelection.viewUrl);
+				var storedVirtualEditUrl = normalizeUrlForSelection(storedSelection.editUrl);
+				selectedRow = virtualFilteredRows.find(function (record) {
+					return (
+						(storedVirtualViewUrl &&
+							normalizeUrlForSelection(record.viewUrl) === storedVirtualViewUrl) ||
+						(storedVirtualEditUrl &&
+							normalizeUrlForSelection(record.editUrl) === storedVirtualEditUrl)
+					);
+				});
+			}
+
+			if (!selectedRow && storedSelection && storedSelection.searchText) {
+				selectedRow = virtualFilteredRows.find(function (record) {
+					return record.searchText === normalizeSearchText(storedSelection.searchText);
+				});
+			}
+
+			if (
+				!selectedRow &&
+				storedSelection &&
+				parseInt(storedSelection.visibleIndex, 10) >= 0
+			) {
+				selectedRow =
+					virtualFilteredRows[parseInt(storedSelection.visibleIndex, 10)] || null;
+			}
+
+			$menu.removeData('restoreSelection');
+			$menu.removeData('restoreTargetUrl');
+			setSelectedIndexedRow(selectedRow || virtualFilteredRows[0] || null);
+			return;
+		}
 
 		if (!selectedRow && !storedSelection) {
 			selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
@@ -1492,6 +2226,26 @@ jQuery(function ($) {
 	}
 
 	function selectRelativeVisibleRow(step) {
+		if (virtualRows.length) {
+			if (!virtualFilteredRows.length) {
+				setSelectedIndexedRow(null);
+				return;
+			}
+
+			var virtualIndex = virtualFilteredRows.findIndex(function (record) {
+				return record.id === virtualSelectedId;
+			});
+			if (virtualIndex < 0) {
+				virtualIndex = step > 0 ? -1 : 0;
+			}
+			virtualIndex = Math.max(
+				0,
+				Math.min(virtualFilteredRows.length - 1, virtualIndex + step),
+			);
+			setSelectedIndexedRow(virtualFilteredRows[virtualIndex]);
+			return;
+		}
+
 		var visibleRows = getVisibleIndexedRows();
 		if (!visibleRows.length) {
 			setSelectedIndexedRow(null);
@@ -1514,6 +2268,30 @@ jQuery(function ($) {
 	}
 
 	function openSelectedRow(useEditUrl) {
+		if (virtualRows.length) {
+			var virtualRecord =
+				getVirtualRecordById(virtualSelectedId) || virtualFilteredRows[0];
+			var renderedVirtualRow = ensureVirtualRecordRendered(virtualRecord);
+			if (!virtualRecord || !renderedVirtualRow || !renderedVirtualRow.row) {
+				return;
+			}
+			setSelectedIndexedRow(virtualRecord);
+			var virtualSelection = getVirtualSelectionData(virtualRecord);
+			persistOpenMenuState(
+				'wp-admin-bar-recently-edited',
+				virtualSelection,
+				useEditUrl ? virtualRecord.editUrl : virtualRecord.viewUrl,
+			);
+			sessionStorage.setItem(storageKey('wp-admin-bar-recently-edited'), 'true');
+			var $virtualTarget = useEditUrl
+				? $(renderedVirtualRow.row).find('.elodin-recently-edited-edit').first()
+				: $(renderedVirtualRow.row).find('.elodin-recently-edited-title-link').first();
+			if ($virtualTarget.length) {
+				$virtualTarget.trigger('click');
+			}
+			return;
+		}
+
 		var selected = getVisibleIndexedRows().find(function (indexedRow) {
 			return indexedRow.item.classList.contains('is-keyboard-selected');
 		});
@@ -1741,6 +2519,19 @@ jQuery(function ($) {
 	}
 
 	function toggleSelectedRowPin() {
+		if (virtualRows.length) {
+			var virtualRecord =
+				getVirtualRecordById(virtualSelectedId) || virtualFilteredRows[0];
+			var renderedVirtualRow = ensureVirtualRecordRendered(virtualRecord);
+			if (renderedVirtualRow && renderedVirtualRow.row) {
+				$(renderedVirtualRow.row)
+					.find('.elodin-recently-edited-pin')
+					.first()
+					.trigger('click');
+			}
+			return;
+		}
+
 		var selected = getVisibleIndexedRows().find(function (indexedRow) {
 			return indexedRow.item.classList.contains('is-keyboard-selected');
 		});
@@ -1773,6 +2564,25 @@ jQuery(function ($) {
 			$menu.find('.elodin-related-pill.is-active').data('relatedTarget') ||
 			'all'
 		);
+	}
+
+	function updateCurrentTypePill($menu) {
+		$menu = $menu && $menu.length ? $menu : $('#wp-admin-bar-recently-edited');
+		var currentPostType = String(
+			ElodinRecentlyEdited.currentPostType || '',
+		);
+		$menu.find('.elodin-related-pill').removeClass('is-current');
+		if (!currentPostType) {
+			return;
+		}
+
+		$menu
+			.find(
+				'.elodin-related-pill[data-related-target="' +
+					currentPostType +
+					'"]',
+			)
+			.addClass('is-current');
 	}
 
 	function rowMatchesGroup($row, group) {
@@ -1811,6 +2621,16 @@ jQuery(function ($) {
 		if (target === 'media') {
 			setSelectedMediaCard(null);
 			loadMediaItems();
+		}
+
+		if (virtualRows.length) {
+			filterMenuItems(
+				$menu,
+				$menu.find('.elodin-recently-edited-search-input').first().val(),
+			);
+			getVirtualList().scrollTop(0);
+			selectFirstVisibleRow();
+			return;
 		}
 
 		getRowIndex().forEach(function (indexedRow) {
@@ -1891,6 +2711,7 @@ jQuery(function ($) {
 	function closeTitleEditor($input, savedTitle) {
 		var $title = $input.closest('.elodin-recently-edited-title');
 		var $link = $title.find('.elodin-recently-edited-title-link').first();
+		var $row = $title.closest('.elodin-recently-edited-row');
 
 		if (typeof savedTitle === 'string') {
 			$link.data('fullTitle', savedTitle).attr('data-full-title', savedTitle);
@@ -1899,6 +2720,10 @@ jQuery(function ($) {
 		$title.removeClass('is-editing');
 		$link.show();
 		$input.remove();
+		var record = syncVirtualRecordFromRow($row);
+		if (record) {
+			rebuildVirtualFilter(false);
+		}
 	}
 
 	function updateTitleRows(resourceType, resourceId, title, displayTitle, searchText) {
@@ -1922,6 +2747,7 @@ jQuery(function ($) {
 	function closeSlugEditor($input, savedSlug) {
 		var $slug = $input.closest('.elodin-recently-edited-slug');
 		var $text = $slug.find('.elodin-recently-edited-slug-text').first();
+		var $row = $slug.closest('.elodin-recently-edited-row');
 
 		if (typeof savedSlug === 'string') {
 			$text.data('fullSlug', savedSlug).attr('data-full-slug', savedSlug);
@@ -1930,6 +2756,10 @@ jQuery(function ($) {
 		$slug.removeClass('is-editing');
 		$text.show();
 		$input.remove();
+		var record = syncVirtualRecordFromRow($row);
+		if (record) {
+			rebuildVirtualFilter(false);
+		}
 	}
 
 	function copyTextWithFeedback($element, copyText, feedbackText) {
@@ -2533,9 +3363,7 @@ jQuery(function ($) {
 	setPageScrollbarCompensation();
 	updateSearchPlaceholder();
 	checkAndRestoreMenuState();
-	if (!hydrateRecentlyEditedMenuFromCache()) {
-		scheduleMenuIndexBuild();
-	}
+	scheduleMenuIndexBuild();
 	watchBlockEditorSaves();
 
 	$(window).on('resize orientationchange', setPageScrollbarCompensation);
@@ -2590,8 +3418,15 @@ jQuery(function ($) {
 						} else {
 							$matchingPins.addClass('is-pinned').text('★');
 						}
+						var pinnedRecord = syncVirtualRecordFromRow($selectedRow);
+						if (pinnedRecord) {
+							pinnedRecord.pinned = !isPinned;
+							virtualSelectedId = pinnedRecord.id;
+						}
 						sortRowsByPinnedState();
-						if (selectedResource) {
+						if (pinnedRecord) {
+							setSelectedIndexedRow(pinnedRecord);
+						} else if (selectedResource) {
 							var selectedRow = getVisibleIndexedRows().find(function (indexedRow) {
 								var rowResource = getRowSelectionData($(indexedRow.row));
 								return (
@@ -2704,6 +3539,9 @@ jQuery(function ($) {
 			.done(function (response) {
 				if (!response || !response.success) {
 					updateReviewStatusAppearance($button, persistedState);
+					syncVirtualRecordFromRow(
+						$button.closest('.elodin-recently-edited-row'),
+					);
 					announce((ElodinRecentlyEdited.strings || {}).reviewSaveFailed || 'Unable to save review status.');
 					return;
 				}
@@ -2729,6 +3567,9 @@ jQuery(function ($) {
 					return;
 				}
 				updateReviewStatusAppearance($button, persistedState);
+				syncVirtualRecordFromRow(
+					$button.closest('.elodin-recently-edited-row'),
+				);
 				announce((ElodinRecentlyEdited.strings || {}).reviewSaveFailed || 'Unable to save review status.');
 			})
 			.always(function () {
@@ -2764,6 +3605,9 @@ jQuery(function ($) {
 				$button.data('persistedReviewState', persistedState);
 			}
 			updateReviewStatusAppearance($button, nextState);
+			syncVirtualRecordFromRow(
+				$button.closest('.elodin-recently-edited-row'),
+			);
 
 			var saveTimer = $button.data('reviewSaveTimer');
 			if (saveTimer) {
@@ -3145,6 +3989,7 @@ jQuery(function ($) {
 			})
 				.done(function (response) {
 					if (response.success) {
+						var affectedStatusRecord = getVirtualRecordForElement($select[0]);
 						var $matchingStatusSelects = $(
 							'#wp-admin-bar-recently-edited .elodin-recently-edited-status-select',
 						).filter(function () {
@@ -3155,9 +4000,26 @@ jQuery(function ($) {
 							$matchingStatusSelects
 								.closest('.elodin-recently-edited-list-item')
 								.remove();
+							var deletedRecord = affectedStatusRecord;
+							if (deletedRecord) {
+								virtualRows = virtualRows.filter(function (record) {
+									return record.id !== deletedRecord.id;
+								});
+								if (virtualSelectedId === deletedRecord.id) {
+									virtualSelectedId = '';
+								}
+								rebuildVirtualFilter(false);
+								selectFirstVisibleRow();
+							}
 						} else {
 							// Update the original status
 							$matchingStatusSelects.data('original', status).val(status);
+							var statusRecord = syncVirtualRecordFromRow(
+								$select.closest('.elodin-recently-edited-row'),
+							);
+							if (statusRecord) {
+								renderVirtualWindow();
+							}
 						}
 						invalidateRowIndex();
 						clearClientMenuCache();
@@ -3213,6 +4075,9 @@ jQuery(function ($) {
 							})
 							.data('original', status)
 							.val(status);
+						syncVirtualRecordFromRow(
+							$select.closest('.elodin-recently-edited-row'),
+						);
 						clearClientMenuCache();
 						announce('Form status updated');
 					} else {
@@ -3264,6 +4129,12 @@ jQuery(function ($) {
 							})
 							.data('original', postType)
 							.val(postType);
+						var $postTypeRow = $select.closest('.elodin-recently-edited-row');
+						$postTypeRow.attr('data-post-type', postType);
+						var postTypeRecord = syncVirtualRecordFromRow($postTypeRow);
+						if (postTypeRecord) {
+							rebuildVirtualFilter(false);
+						}
 						invalidateRowIndex();
 						clearClientMenuCache();
 						announce('Content type updated');
