@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.2 - 2026-08-05
+- Restored personal review-status colors from current user data after hydrating a cached menu, so colors persist across page refreshes without rebuilding the index.
+- Displayed the plugin version beside the Settings link in the Recently Edited dropdown and below the settings page heading.
+
 ## 1.8.1 - 2026-07-22
 - Changed generic post saves, including REST and AJAX imports, to set one lightweight dirty marker instead of clearing and rebuilding the index after every request.
 - Deferred stale-cache invalidation until an administrator next loads a page, while preserving an immediate refresh specifically after successful manual Gutenberg saves.

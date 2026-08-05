@@ -656,6 +656,7 @@ function elodin_recently_edited_render_settings_page() {
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'Recently Edited Settings', 'elodin-recently-edited' ); ?></h1>
+		<p class="description"><?php esc_html_e( 'Version', 'elodin-recently-edited' ); ?> <?php echo esc_html( ELODIN_RECENTLY_EDITED_VERSION ); ?></p>
 		<form id="elodin-recently-edited-settings-form" action="options.php" method="post">
 			<?php settings_fields( 'elodin_recently_edited_settings' ); ?>
 			<input type="hidden" name="elodin_recently_edited_settings_nonce" value="<?php echo esc_attr( wp_create_nonce( 'elodin_recently_edited_save_settings' ) ); ?>" />

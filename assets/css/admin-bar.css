@@ -146,6 +146,13 @@
 		opacity: 0.7;
 	}
 
+	.elodin-recently-edited-toolbar-version {
+		color: rgba(255, 255, 255, 0.58);
+		font-size: 12px;
+		line-height: 1.2;
+		white-space: nowrap;
+	}
+
 	.elodin-recently-edited-no-matches {
 		display: none;
 	}

@@ -3506,8 +3506,8 @@ jQuery(function ($) {
 					class: 'elodin-recently-edited-review-dot',
 					'aria-hidden': 'true',
 				})).appendTo($markers);
-				updateReviewStatusAppearance($button, String(savedStates[postId] || ''));
 			}
+			updateReviewStatusAppearance($button, String(savedStates[postId] || ''));
 		});
 	}
 

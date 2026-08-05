@@ -946,6 +946,7 @@ function elodin_recently_edited_get_search_toolbar_html() {
 	$toolbar_links = '';
 	if ( current_user_can( 'manage_options' ) ) {
 		$toolbar_links = '<a class="elodin-recently-edited-toolbar-link" href="' . esc_url( admin_url( 'options-general.php?page=elodin-recently-edited-settings' ) ) . '">' . esc_html__( 'Settings', 'elodin-recently-edited' ) . '</a>'
+			. '<span class="elodin-recently-edited-toolbar-version">v' . esc_html( ELODIN_RECENTLY_EDITED_VERSION ) . '</span>'
 			. '<a class="elodin-recently-edited-toolbar-link elodin-recently-edited-cache-refresh" href="#">' . esc_html__( 'Rebuild cache', 'elodin-recently-edited' ) . '</a>';
 	}
 
