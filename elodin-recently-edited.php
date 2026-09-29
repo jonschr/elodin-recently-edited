@@ -3,7 +3,7 @@
  * Recently Edited Quick Links - Main Plugin File
  *
  * @package ElodinRecentlyEdited
- * @version 1.8.2
+ * @version 1.8.3
  * @author Jon Schroeder
  * @license GPL-2.0+
  */
@@ -12,7 +12,7 @@
 	Plugin Name: Recently Edited Quick Links
 	Plugin URI: https://elod.in
 	Description: Adds a quick access menu to the WordPress admin bar showing recently edited posts with status management and pinning functionality.
-	Version: 1.8.2
+	Version: 1.8.3
 	Author: Jon Schroeder
 	Author URI: https://elod.in
 	License: GPL-2.0+
@@ -31,12 +31,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Define plugin constants
 define( 'ELODIN_RECENTLY_EDITED_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ELODIN_RECENTLY_EDITED_URL', plugin_dir_url( __FILE__ ) );
-define( 'ELODIN_RECENTLY_EDITED_VERSION', '1.8.2' );
+define( 'ELODIN_RECENTLY_EDITED_VERSION', '1.8.3' );
 define( 'ELODIN_RECENTLY_EDITED_BASENAME', plugin_basename( __FILE__ ) );
 define( 'ELODIN_RECENTLY_EDITED_LEMON_PRODUCT_ID', 984046 );
 
 // Dirty tracking must remain active for core REST and third-party AJAX saves.
 require_once ELODIN_RECENTLY_EDITED_DIR . 'lib/cache.php';
+
+// Update checks must also run during WordPress AJAX, cron, and WP-CLI requests.
+$update_checker_file = ELODIN_RECENTLY_EDITED_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php';
+if ( file_exists( $update_checker_file ) ) {
+	require $update_checker_file;
+
+	if ( class_exists( 'Puc_v4_Factory' ) ) {
+		Puc_v4_Factory::buildUpdateChecker(
+			'https://raw.githubusercontent.com/jonschr/elodin-recently-edited/master/update.json',
+			__FILE__,
+			'elodin-recently-edited'
+		);
+	}
+}
 
 /**
  * Determine whether the current request is an AJAX action owned by this plugin.
@@ -132,22 +146,3 @@ add_action( 'wp_ajax_elodin_recently_edited_update_post_type', 'elodin_recently_
 add_action( 'wp_ajax_elodin_recently_edited_update_title', 'elodin_recently_edited_update_title' );
 add_action( 'wp_ajax_elodin_recently_edited_update_slug', 'elodin_recently_edited_update_slug' );
 add_action( 'wp_ajax_elodin_recently_edited_flush_menu_cache', 'elodin_recently_edited_flush_menu_cache_ajax' );
-
-// Load Plugin Update Checker with error handling
-$update_checker_file = ELODIN_RECENTLY_EDITED_DIR . 'vendor/plugin-update-checker/plugin-update-checker.php';
-if ( is_admin() && ! ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) && ! elodin_recently_edited_is_rest_request() && file_exists( $update_checker_file ) ) {
-	require $update_checker_file;
-
-	if ( class_exists( 'Puc_v4_Factory' ) ) {
-		$update_checker = Puc_v4_Factory::buildUpdateChecker(
-			'https://github.com/jonschr/elodin-recently-edited',
-			__FILE__,
-			'elodin-recently-edited'
-		);
-
-		// Set the branch that contains the stable release
-		if ( method_exists( $update_checker, 'setBranch' ) ) {
-			$update_checker->setBranch( 'master' );
-		}
-	}
-}

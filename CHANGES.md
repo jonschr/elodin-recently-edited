@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.3 - 2026-09-29
+- Switched update checks to static JSON metadata and loaded the checker during AJAX, cron, and WP-CLI requests.
+
 ## 1.8.2 - 2026-08-05
 - Restored personal review-status colors from current user data after hydrating a cached menu, so colors persist across page refreshes without rebuilding the index.
 - Displayed the plugin version beside the Settings link in the Recently Edited dropdown and below the settings page heading.
