@@ -50,6 +50,7 @@ dedicated Cove site:
 
 ```sh
 php -l elodin-recently-edited.php
+node --test tests/shortcut-training.test.js
 for file in lib/*.php tests/*.php; do php -l "$file" || break; done
 wp --path="$(cove path recently-edited-main-dev)" \
   --require=tests/updater-smoke.php eval-file tests/updater-smoke.php
@@ -64,3 +65,15 @@ ignored; no licensing-server requests or automatic remote deactivations are made
 For UI changes, also exercise the affected admin-bar or settings flow in the
 test site while logged in. The smoke test does not cover those interactions.
 There is no project-level Composer or npm build configuration.
+
+## Keyboard shortcut training
+
+The menu includes “Turn off keyboard shortcut training.” This hides training
+hover tooltips and shortcut hints in the search field while leaving keyboard
+shortcuts active. The menu switch disappears after training has been off for one minute. The
+plugin settings page can always re-enable tooltips. The one-minute deadline
+persists across reloads; existing opt-outs from earlier versions are treated as
+already past that deadline. The choice is saved in this browser for the current site and
+synchronized between its open tabs. Browser storage is isolated by origin, so
+unrelated websites and different browser profiles keep separate preferences.
+If browser storage is blocked, the toggle still works for the current page.

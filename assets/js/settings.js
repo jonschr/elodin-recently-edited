@@ -1,6 +1,15 @@
 (function () {
 	'use strict';
 
+	var training = window.ElodinRecentlyEditedTraining;
+	var trainingInput = document.getElementById('elodin-recently-edited-training-enabled');
+	if (trainingInput) {
+		var syncTraining = function () { trainingInput.checked = !training.isOff(); };
+		trainingInput.addEventListener('change', function () { training.setOff(!this.checked, true); });
+		window.addEventListener('elodin-shortcut-training-change', syncTraining);
+		syncTraining();
+	}
+
 	var config = window.ElodinRecentlyEditedSettings || {};
 	var strings = config.strings || {};
 	var form = document.getElementById('elodin-recently-edited-settings-form');

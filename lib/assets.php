@@ -5,6 +5,17 @@
  * @package ElodinRecentlyEdited
  */
 
+function elodin_recently_edited_register_training_script() {
+	$path = ELODIN_RECENTLY_EDITED_DIR . 'assets/js/shortcut-training.js';
+	wp_register_script(
+		'elodin-recently-edited-training',
+		ELODIN_RECENTLY_EDITED_URL . 'assets/js/shortcut-training.js',
+		array(),
+		filemtime( $path ),
+		true
+	);
+}
+
 /**
  * Enqueue assets for the Recently Edited Quick Links plugin.
  *
@@ -15,6 +26,7 @@
  * @return void
  */
 function elodin_recently_edited_enqueue_assets() {
+	elodin_recently_edited_register_training_script();
 	// Only load assets if admin bar is visible
 	if ( function_exists( 'elodin_recently_edited_should_load_admin_bar' ) ) {
 		if ( ! elodin_recently_edited_should_load_admin_bar() ) {
@@ -77,7 +89,24 @@ function elodin_recently_edited_enqueue_assets() {
 			'cacheKey'        => 'elodin_recently_edited_menu_' . md5( home_url() ) . '_' . ELODIN_RECENTLY_EDITED_VERSION,
 			'cacheSchema'     => function_exists( 'elodin_recently_edited_get_client_menu_cache_version' ) ? elodin_recently_edited_get_client_menu_cache_version() : 1,
 			'cacheFormat'     => 3,
+			'tooltips'        => array(
+				'search'          => __( 'Search content', 'elodin-recently-edited' ),
+				'viewCurrent'     => __( 'View current page', 'elodin-recently-edited' ),
+				'editCurrent'     => __( 'Edit current page', 'elodin-recently-edited' ),
+				'changeStatus'    => __( 'Change status', 'elodin-recently-edited' ),
+				'changePostType'  => __( 'Change post type', 'elodin-recently-edited' ),
+				'copyUrl'         => __( 'Copy item URL', 'elodin-recently-edited' ),
+				'contentTypes'    => __( 'Switch content type', 'elodin-recently-edited' ),
+				'star'            => __( 'Star item', 'elodin-recently-edited' ),
+				'unstar'          => __( 'Unstar item', 'elodin-recently-edited' ),
+				'view'            => __( 'View item', 'elodin-recently-edited' ),
+				'edit'            => __( 'Edit item', 'elodin-recently-edited' ),
+				'copyFilename'    => __( 'Copy filename', 'elodin-recently-edited' ),
+				'media'           => __( 'Navigate media', 'elodin-recently-edited' ),
+				'editField'       => __( 'Save / Cancel', 'elodin-recently-edited' ),
+			),
 			'strings'         => array(
+				'shortcutTrainingOff' => __( 'Turn off keyboard shortcut training', 'elodin-recently-edited' ),
 				'copied'             => __( 'Copied', 'elodin-recently-edited' ),
 				'copiedFilename'     => __( 'Copied filename', 'elodin-recently-edited' ),
 				'copiedUrl'          => __( 'Copied URL', 'elodin-recently-edited' ),
@@ -107,7 +136,7 @@ function elodin_recently_edited_enqueue_assets() {
 	wp_enqueue_script(
 		'elodin-recently-edited-js',
 		plugin_dir_url( __FILE__ ) . '../assets/js/admin-bar.js',
-		array( 'jquery' ),
+		array( 'jquery', 'elodin-recently-edited-training' ),
 		$js_ver,
 		true
 	);

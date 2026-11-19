@@ -467,6 +467,8 @@ function elodin_recently_edited_enqueue_settings_assets( $hook_suffix ) {
 		return;
 	}
 
+	elodin_recently_edited_register_training_script();
+
 	$script_path = ELODIN_RECENTLY_EDITED_DIR . 'assets/js/settings.js';
 	$style_path  = ELODIN_RECENTLY_EDITED_DIR . 'assets/css/settings.css';
 
@@ -480,7 +482,7 @@ function elodin_recently_edited_enqueue_settings_assets( $hook_suffix ) {
 	wp_enqueue_script(
 		'elodin-recently-edited-settings',
 		ELODIN_RECENTLY_EDITED_URL . 'assets/js/settings.js',
-		array( 'wp-components', 'wp-element' ),
+		array( 'wp-components', 'wp-element', 'elodin-recently-edited-training' ),
 		file_exists( $script_path ) ? filemtime( $script_path ) : ELODIN_RECENTLY_EDITED_VERSION,
 		true
 	);
@@ -657,6 +659,15 @@ function elodin_recently_edited_render_settings_page() {
 	<div class="wrap">
 		<h1><?php esc_html_e( 'Recently Edited Settings', 'elodin-recently-edited' ); ?></h1>
 		<p class="description"><?php esc_html_e( 'Version', 'elodin-recently-edited' ); ?> <?php echo esc_html( ELODIN_RECENTLY_EDITED_VERSION ); ?></p>
+		<h2><?php esc_html_e( 'Keyboard shortcut training', 'elodin-recently-edited' ); ?></h2>
+		<p>
+			<label for="elodin-recently-edited-training-enabled">
+				<input type="checkbox" id="elodin-recently-edited-training-enabled" checked />
+				<?php esc_html_e( 'Show keyboard shortcut tooltips', 'elodin-recently-edited' ); ?>
+			</label>
+		</p>
+		<p class="description"><?php esc_html_e( 'Tooltips are on by default. After turning training off, you have one minute to undo it in the menu. After that, turn it back on here. This preference is saved automatically in this browser for this site.', 'elodin-recently-edited' ); ?></p>
+
 		<form id="elodin-recently-edited-settings-form" action="options.php" method="post">
 			<?php settings_fields( 'elodin_recently_edited_settings' ); ?>
 			<input type="hidden" name="elodin_recently_edited_settings_nonce" value="<?php echo esc_attr( wp_create_nonce( 'elodin_recently_edited_save_settings' ) ); ?>" />

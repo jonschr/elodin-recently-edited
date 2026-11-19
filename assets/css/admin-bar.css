@@ -107,6 +107,70 @@
 		-webkit-appearance: none;
 	}
 
+	.elodin-recently-edited-training-footer {
+		box-sizing: border-box;
+		padding: 8px 10px !important;
+		border-top: 1px solid rgba(255, 255, 255, 0.1);
+		background: #20262b;
+	}
+
+	.elodin-recently-edited-training-toggle {
+		display: flex !important;
+		align-items: center;
+		justify-content: flex-start;
+		gap: 8px;
+		width: 100%;
+		height: auto !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		color: #c0c6cc !important;
+		font-family: inherit !important;
+		font-size: 12px !important;
+		font-weight: 400 !important;
+		line-height: 18px !important;
+		cursor: pointer;
+	}
+
+	.elodin-recently-edited-training-toggle span {
+		font: inherit !important;
+		line-height: inherit !important;
+		color: inherit !important;
+	}
+
+	.elodin-recently-edited-training-off {
+		appearance: none !important;
+		-webkit-appearance: none !important;
+		position: relative;
+		display: block !important;
+		flex: 0 0 28px;
+		box-sizing: border-box;
+		width: 28px !important;
+		min-width: 28px !important;
+		height: 16px !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 1px solid #626c76 !important;
+		border-radius: 999px !important;
+		background: #343d46 !important;
+		box-shadow: none !important;
+		cursor: pointer;
+	}
+
+	.elodin-recently-edited-training-off::before { display: none !important; }
+	.elodin-recently-edited-training-off::after {
+		content: "";
+		position: absolute;
+		left: 2px;
+		top: 2px;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: #d6dce2;
+	}
+	.elodin-recently-edited-training-off:checked { background: #e8c547 !important; border-color: #e8c547 !important; }
+	.elodin-recently-edited-training-off:checked::after { transform: translateX(12px); background: #20262b; }
+	.elodin-recently-edited-training-off:focus-visible { outline: 2px solid #e8c547; outline-offset: 3px; }
+
 	.elodin-recently-edited-toolbar-links {
 		flex: 0 0 auto;
 		display: flex;
@@ -1558,4 +1622,38 @@
 		grid-column: 1 / -1 !important;
 		grid-row: 2 !important;
 	}
+}
+
+/* Compact dark hover hints, outside the admin bar's clipping/reset rules. */
+#elodin-recently-edited-tooltip {
+	position: fixed;
+	box-sizing: border-box;
+	inset: auto;
+	width: max-content;
+	max-width: min(280px, calc(100vw - 16px));
+	margin: 0;
+	padding: 4px 6px;
+	border: 0;
+	border-radius: 4px;
+	background: #171b20;
+	color: #f0f2f4;
+	box-shadow: 0 3px 12px rgb(0 0 0 / 28%);
+	font: 400 11px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	overflow: visible;
+	overflow-wrap: anywhere;
+	z-index: 2147483647;
+	pointer-events: none;
+}
+#elodin-recently-edited-tooltip[hidden] { display: none; }
+#elodin-recently-edited-tooltip .elodin-tooltip-line { display: flex; align-items: center; gap: 7px; }
+#elodin-recently-edited-tooltip kbd {
+	flex-shrink: 0;
+	padding: 0 4px;
+	border: 1px solid #4b535d;
+	border-radius: 4px;
+	background: #292f36;
+	color: #d6dce2;
+	font: inherit;
+	line-height: 14px;
+	white-space: nowrap;
 }

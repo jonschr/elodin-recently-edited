@@ -33,6 +33,130 @@ jQuery(function ($) {
 	var virtualOverscanPixels = 300;
 	var isMac = /Mac|iPhone|iPad|iPod/.test(window.navigator.platform || '');
 
+	// One compact hover tooltip with a separate shortcut keycap.
+	var tooltipCopy = ElodinRecentlyEdited.tooltips || {};
+	var primaryKey = isMac ? '⌘' : 'Ctrl';
+	var tooltipRules = [
+		['.elodin-recently-edited-search-input', 'search', primaryKey + (isMac ? ' ⇧ E' : ' Shift E'), (isMac ? 'Meta' : 'Control') + '+Shift+E'],
+		['#wp-admin-bar-edit > .ab-item, #wp-admin-bar-view > .ab-item', ElodinRecentlyEdited.isAdmin ? 'viewCurrent' : 'editCurrent', primaryKey + (isMac ? ' ⌥ E' : ' Alt E'), (isMac ? 'Meta' : 'Control') + '+Alt+E'],
+		['.elodin-recently-edited-search-clear', '', 'Backspace'],
+		['.elodin-recently-edited-slug-text', 'copyUrl'],
+		['.elodin-recently-edited-status-select, .elodin-recently-edited-form-status-select', 'changeStatus'],
+		['.elodin-recently-edited-post-type-select', 'changePostType'],
+		['.elodin-related-pill', 'contentTypes', '← →'],
+		['.elodin-recently-edited-pin', 'star', isMac ? '⇧ S' : 'Shift S'],
+		['.elodin-recently-edited-title-link', 'view', 'Enter'],
+		['.elodin-recently-edited-edit, .elodin-recently-edited-media-edit', 'edit', primaryKey + ' Enter'],
+		['.elodin-recently-edited-media-filename', 'copyFilename', 'Enter'],
+		['.elodin-recently-edited-media-card', 'media', '↑ ↓ ← →'],
+		['.elodin-recently-edited-meta-back', '', 'Esc'],
+		['.elodin-recently-edited-title-input, .elodin-recently-edited-slug-input', 'editField', 'Enter / Esc'],
+		['.elodin-recently-edited-review-status, .elodin-recently-edited-meta-trigger, .elodin-recently-edited-id', ''],
+	];
+	var tooltipSelector = tooltipRules.map(function (rule) { return rule[0]; }).join(', ');
+	var $shortcutTooltip = $('<div>', {
+		id: 'elodin-recently-edited-tooltip', role: 'tooltip', popover: 'manual', hidden: true,
+	}).appendTo('body');
+	var tooltipTarget = null;
+	var tooltipTitle = null;
+	var shortcutTraining = window.ElodinRecentlyEditedTraining;
+
+	function syncShortcutTrainingToggle() {
+		$('#wp-admin-bar-recently-edited > .ab-sub-wrapper').each(function () {
+			var $footer = $(this).children('.elodin-recently-edited-training-footer');
+			if (!shortcutTraining.canUndoFromMenu()) { $footer.remove(); return; }
+			if (!$footer.length) {
+				$footer = $('<div>', { class: 'elodin-recently-edited-training-footer' })
+					.append($('<label>', { class: 'elodin-recently-edited-training-toggle' })
+						.append($('<input>', { type: 'checkbox', role: 'switch', class: 'elodin-recently-edited-training-off' }))
+						.append($('<span>', { text: ElodinRecentlyEdited.strings.shortcutTrainingOff })))
+					.appendTo(this);
+			}
+			$footer.find('input').prop('checked', shortcutTraining.isOff());
+		});
+	}
+
+	$(document).on('change', '.elodin-recently-edited-training-off', function () {
+		shortcutTraining.setOff(this.checked);
+	});
+	window.addEventListener('elodin-shortcut-training-change', function () {
+		hideShortcutTooltip();
+		updateSearchPlaceholder();
+	});
+
+	function hideShortcutTooltip() {
+		if (tooltipTarget) {
+			var descriptions = (tooltipTarget.getAttribute('aria-describedby') || '').split(/\s+/).filter(function (id) {
+				return id && id !== $shortcutTooltip.attr('id');
+			});
+			if (descriptions.length) tooltipTarget.setAttribute('aria-describedby', descriptions.join(' '));
+			else tooltipTarget.removeAttribute('aria-describedby');
+			if (tooltipTitle !== null) tooltipTarget.setAttribute('title', tooltipTitle);
+		}
+		tooltipTarget = null;
+		var tooltip = $shortcutTooltip[0];
+		if (tooltip.hidePopover && tooltip.matches(':popover-open')) tooltip.hidePopover();
+		$shortcutTooltip.prop('hidden', true);
+	}
+
+	function showShortcutTooltip(target, event) {
+		if (shortcutTraining.isOff()) return;
+		var rule = tooltipRules.find(function (candidate) { return target.matches(candidate[0]); });
+		if (!rule || target.disabled) return;
+		hideShortcutTooltip();
+		var label = tooltipCopy[rule[1]] || target.getAttribute('aria-label') || target.getAttribute('title');
+		if (rule[1] === 'star' && target.classList.contains('is-pinned')) label = tooltipCopy.unstar;
+		if (!label) return;
+		tooltipTarget = target;
+		tooltipTitle = target.getAttribute('title');
+		target.removeAttribute('title');
+		$shortcutTooltip.empty();
+		var $line = $('<div>', { class: 'elodin-tooltip-line' }).append($('<span>', { text: label })).appendTo($shortcutTooltip);
+		if (rule[2]) $('<kbd>', { text: rule[2] }).appendTo($line);
+		if (rule[3]) target.setAttribute('aria-keyshortcuts', rule[3]);
+		target.setAttribute('aria-describedby', [target.getAttribute('aria-describedby'), $shortcutTooltip.attr('id')].filter(Boolean).join(' '));
+		$shortcutTooltip.prop('hidden', false);
+		var tooltip = $shortcutTooltip[0];
+		if (tooltip.showPopover) tooltip.showPopover();
+		positionShortcutTooltip(event.clientX, event.clientY);
+	}
+
+	function positionShortcutTooltip(pointerX, pointerY) {
+		var tooltip = $shortcutTooltip[0];
+		var viewport = window.visualViewport;
+		var left = (viewport ? viewport.offsetLeft : 0) + 8;
+		var top = (viewport ? viewport.offsetTop : 0) + 8;
+		var right = left + (viewport ? viewport.width : window.innerWidth) - 16;
+		var bottom = top + (viewport ? viewport.height : window.innerHeight) - 16;
+		var width = tooltip.offsetWidth, height = tooltip.offsetHeight;
+		var x = pointerX + 14;
+		if (x + width > right) x = pointerX - width - 14;
+		$shortcutTooltip.css({
+			left: Math.max(left, Math.min(x, right - width)) + 'px',
+			top: Math.max(top, Math.min(pointerY + 10, bottom - height)) + 'px',
+		});
+	}
+
+	$(document).on('pointerover', tooltipSelector, function (event) {
+		if (!$(this).closest('#wp-admin-bar-recently-edited, #wp-admin-bar-edit, #wp-admin-bar-view').length) return;
+		if (event.originalEvent.pointerType !== 'mouse' || this.contains(event.relatedTarget)) return;
+		// A media card contains its own controls; let the innermost target win.
+		if ($(event.target).closest(tooltipSelector)[0] !== this) return;
+		showShortcutTooltip(this, event);
+	}).on('pointermove', tooltipSelector, function (event) {
+		if (this === tooltipTarget) positionShortcutTooltip(event.clientX, event.clientY);
+	}).on('pointerout', tooltipSelector, function (event) {
+		if (this === tooltipTarget && !this.contains(event.relatedTarget)) hideShortcutTooltip();
+	});
+	document.addEventListener('keydown', hideShortcutTooltip, true);
+	document.addEventListener('click', hideShortcutTooltip, true);
+	document.addEventListener('scroll', hideShortcutTooltip, true);
+	window.addEventListener('resize', hideShortcutTooltip);
+	if (window.visualViewport) {
+		window.visualViewport.addEventListener('resize', hideShortcutTooltip);
+		window.visualViewport.addEventListener('scroll', hideShortcutTooltip);
+	}
+
 	function storageKey(menuId) {
 		return 'elodin_recently_edited_keep_menu_open';
 	}
@@ -70,13 +194,14 @@ jQuery(function ($) {
 	}
 
 	function getSearchShortcutLabel() {
-		return isMac ? 'Cmd+Shift+E' : 'Ctrl+Shift+E';
+		return isMac ? '⌘⇧E' : 'Ctrl+⇧+E';
 	}
 
 	function updateSearchPlaceholder() {
+		syncShortcutTrainingToggle();
 		$('.elodin-recently-edited-search-input').attr(
 			'placeholder',
-			'Search this site\'s content... (' + getSearchShortcutLabel() + ')',
+			'Search this site\'s content...' + (shortcutTraining.isOff() ? '' : ' (' + getSearchShortcutLabel() + ')'),
 		);
 	}
 
@@ -1335,6 +1460,7 @@ jQuery(function ($) {
 				'aria-modal': 'true',
 				'aria-label': 'Post Meta Inspector',
 			}).appendTo($wrapper);
+			$wrapper.children('.elodin-recently-edited-training-footer').appendTo($wrapper);
 		}
 		return $panel;
 	}

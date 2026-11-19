@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.5 - 2026-11-18
+- Hid the menu training switch one minute after opting out, retaining an always-available control on the settings page to re-enable tooltips. The deadline persists across reloads and tabs.
+- Added action tooltips for status and post-type selectors and moved the training preference into a styled switch in the menu footer.
+- Positioned training tooltips beside the mouse pointer, following its movement and flipping left near the screen edge.
+- Added a browser-local toggle to turn off keyboard shortcut training, preserved across visits and synchronized between tabs on the same site. Keyboard shortcuts remain active.
+- Added compact dark, mouse-hover tooltips showing each action and its platform-aware keyboard shortcut.
+
 ## 1.8.4 - 2026-11-18
 - Removed license-key activation, licensing screens and notices, background validation, and licensing restrictions from the admin bar, editing actions, and REST endpoints.
 - Preserved authentication, capability checks, nonce validation, and GitHub update checks.
