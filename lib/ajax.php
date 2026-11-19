@@ -43,8 +43,6 @@ function elodin_recently_edited_flush_menu_cache_ajax() {
  * @since 0.1
  */
 function elodin_recently_edited_toggle_pin() {
-	elodin_recently_edited_require_active_license_for_ajax();
-
 	// Verify nonce for security
 	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'elodin_recently_edited_pin' ) ) {
 		wp_send_json_error( array( 'message' => 'Invalid nonce.' ), 403 );
@@ -97,8 +95,6 @@ function elodin_recently_edited_toggle_pin() {
  * @return void
  */
 function elodin_recently_edited_update_review_status() {
-	elodin_recently_edited_require_active_license_for_ajax();
-
 	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'elodin_recently_edited_review' ) ) {
 		wp_send_json_error( array( 'message' => __( 'Security check failed.', 'elodin-recently-edited' ) ), 403 );
 	}
@@ -156,8 +152,6 @@ function elodin_recently_edited_update_review_status() {
  * @since 0.1
  */
 function elodin_recently_edited_update_status() {
-	elodin_recently_edited_require_active_license_for_ajax();
-
 	// Verify nonce for security
 	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'elodin_recently_edited_status' ) ) {
 		wp_send_json_error( array( 'message' => 'Invalid nonce.' ), 403 );
@@ -266,8 +260,6 @@ function elodin_recently_edited_get_gravity_form( $form_id ) {
  * @since 1.3.0
  */
 function elodin_recently_edited_update_gravity_form_status() {
-	elodin_recently_edited_require_active_license_for_ajax();
-
 	// Verify nonce for security
 	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'elodin_recently_edited_status' ) ) {
 		wp_send_json_error( array( 'message' => 'Invalid nonce.' ), 403 );
@@ -378,8 +370,6 @@ function elodin_recently_edited_update_gravity_form_title( $form_id, $title ) {
  * @since 1.3.0
  */
 function elodin_recently_edited_update_title() {
-	elodin_recently_edited_require_active_license_for_ajax();
-
 	// Verify nonce for security
 	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'elodin_recently_edited_title' ) ) {
 		wp_send_json_error( array( 'message' => 'Invalid nonce.' ), 403 );
@@ -453,8 +443,6 @@ function elodin_recently_edited_update_title() {
  * @since 1.3.0
  */
 function elodin_recently_edited_update_slug() {
-	elodin_recently_edited_require_active_license_for_ajax();
-
 	// Verify nonce for security
 	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'elodin_recently_edited_slug' ) ) {
 		wp_send_json_error( array( 'message' => 'Invalid nonce.' ), 403 );
@@ -523,8 +511,6 @@ function elodin_recently_edited_update_slug() {
  * @since 0.1
  */
 function elodin_recently_edited_update_post_type() {
-	elodin_recently_edited_require_active_license_for_ajax();
-
 	// Verify nonce for security
 	if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'elodin_recently_edited_post_type' ) ) {
 		wp_send_json_error( array( 'message' => 'Invalid nonce.' ), 403 );

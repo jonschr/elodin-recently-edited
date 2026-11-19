@@ -429,7 +429,7 @@ function elodin_recently_edited_should_preload_menu_index() {
  * @return bool Whether menu runtime should run.
  */
 function elodin_recently_edited_should_load_admin_bar() {
-	if ( ! is_admin_bar_showing() || ! elodin_recently_edited_runtime_enabled() ) {
+	if ( ! is_admin_bar_showing() ) {
 		return false;
 	}
 
@@ -742,7 +742,7 @@ function elodin_recently_edited_rebuild_menu_cache( $user_id = 0 ) {
 		wp_set_current_user( $user_id );
 	}
 
-	if ( ! is_user_logged_in() || ! elodin_recently_edited_runtime_enabled() ) {
+	if ( ! is_user_logged_in() ) {
 		return;
 	}
 
@@ -2145,7 +2145,7 @@ function elodin_recently_edited_register_rest_routes() {
 			'methods'             => WP_REST_Server::READABLE,
 			'callback'            => 'elodin_recently_edited_rest_get_menu',
 			'permission_callback' => function () {
-				return is_user_logged_in() && elodin_recently_edited_runtime_enabled();
+				return is_user_logged_in();
 			},
 			'args'                => array(
 				'refresh' => array(
@@ -2163,7 +2163,7 @@ function elodin_recently_edited_register_rest_routes() {
 			'methods'             => WP_REST_Server::READABLE,
 			'callback'            => 'elodin_recently_edited_rest_get_media',
 			'permission_callback' => function () {
-				return is_user_logged_in() && current_user_can( 'upload_files' ) && elodin_recently_edited_runtime_enabled();
+				return is_user_logged_in() && current_user_can( 'upload_files' );
 			},
 		)
 	);
@@ -2199,7 +2199,7 @@ function elodin_recently_edited_register_rest_routes() {
  */
 function elodin_recently_edited_rest_can_inspect_post_meta( $request ) {
 	$post_id = absint( $request->get_param( 'id' ) );
-	if ( ! is_user_logged_in() || ! elodin_recently_edited_runtime_enabled() || ! function_exists( 'elodin_recently_edited_should_enable_meta_inspector' ) || ! elodin_recently_edited_should_enable_meta_inspector() ) {
+	if ( ! is_user_logged_in() || ! function_exists( 'elodin_recently_edited_should_enable_meta_inspector' ) || ! elodin_recently_edited_should_enable_meta_inspector() ) {
 		return new WP_Error( 'elodin_recently_edited_meta_forbidden', __( 'Meta inspection is unavailable.', 'elodin-recently-edited' ), array( 'status' => 403 ) );
 	}
 

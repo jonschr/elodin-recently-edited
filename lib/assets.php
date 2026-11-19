@@ -20,7 +20,7 @@ function elodin_recently_edited_enqueue_assets() {
 		if ( ! elodin_recently_edited_should_load_admin_bar() ) {
 			return;
 		}
-	} elseif ( ! is_admin_bar_showing() || ! elodin_recently_edited_runtime_enabled() ) {
+	} elseif ( ! is_admin_bar_showing() ) {
 		return;
 	}
 

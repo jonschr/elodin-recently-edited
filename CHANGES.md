@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.4 - 2026-11-18
+- Removed license-key activation, licensing screens and notices, background validation, and licensing restrictions from the admin bar, editing actions, and REST endpoints.
+- Preserved authentication, capability checks, nonce validation, and GitHub update checks.
+- Added the GPL-2.0 license text; the plugin remains GPL-2.0-or-later.
+
 ## 1.8.3 - 2026-09-29
 - Switched update checks to static JSON metadata and loaded the checker during AJAX, cron, and WP-CLI requests.
 
